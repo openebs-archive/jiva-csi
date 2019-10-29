@@ -22,6 +22,9 @@ LDFLAGS ?= \
 	-X github.com/openebs/jiva-csi/version/version.Commit=${COMMIT} \
 	-X github.com/openebs/jiva-csi/version/version.DateTime=${DATETIME}
 
+# list only csi source code directories
+PACKAGES = $(shell go list ./... | grep -v 'vendor')
+
 .PHONY: all
 all:
 	@echo "Available commands:"
@@ -50,7 +53,7 @@ print-variables:
 deps: .get
 	GO111MODULE=on go mod vendor
 
-build: deps
+build: deps test
 	GO111MODULE=on GOOS=linux go build -a -ldflags '$(LDFLAGS)' -o ./build/bin/$(PLUGIN_NAME) ./cmd/csi/main.go
 
 image: build
@@ -67,3 +70,12 @@ push-tag: tag
 
 clean:
 	rm -rf ./build/bin/
+
+format:
+	@echo "--> Running go fmt"
+	@go fmt $(PACKAGES)
+
+test: format
+	@echo "--> Running go test" ;
+	@go test $(PACKAGES)
+

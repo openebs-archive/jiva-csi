@@ -18,9 +18,9 @@ package driver
 
 import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/sirupsen/logrus"
 	config "github.com/openebs/jiva-csi/pkg/config"
 	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
+	"github.com/sirupsen/logrus"
 )
 
 // volume can only be published once as
