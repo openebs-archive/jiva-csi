@@ -16,3 +16,7 @@ func newNodeMounter() *NodeMounter {
 		},
 	}
 }
+
+func (m *NodeMounter) GetDeviceName(mountPath string) (string, int, error) {
+	return mount.GetDeviceNameFromMount(m, mountPath)
+}
