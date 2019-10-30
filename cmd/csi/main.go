@@ -32,19 +32,18 @@ func (w *log2LogrusWriter) Write(b []byte) (int, error) {
 	return n, nil
 }
 
+var enableISCSIDebug bool
+
 /*
  * main routine to start the jiva-csi-driver. The same
  * binary is used for controller and agent deployment.
  * they both are differentiated via plugin command line
  * argument. To start the controller, we have to pass
- * --plugin=controller and to start it as agent, we have
- * to pass --plugin=agent.
+ * --plugin=controller and to start it as node, we have
+ * to pass --plugin=node.
  */
 func main() {
-	_ = flag.CommandLine.Parse([]string{})
 	var config = config.Default()
-
-	var enableISCSIDebug bool
 
 	cmd := &cobra.Command{
 		Use:   "jiva-csi-driver",
@@ -56,37 +55,31 @@ func main() {
 	}
 
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
+	_ = flag.CommandLine.Parse([]string{})
 
 	cmd.PersistentFlags().StringVar(
 		&config.NodeID, "nodeid", "", "NodeID to identify the node running this driver",
 	)
 
 	cmd.PersistentFlags().StringVar(
-		&config.Version, "version", "", "Displays driver version",
+		&config.Version, "version", version.Version, "Displays driver version",
 	)
 
 	cmd.PersistentFlags().StringVar(
-		&config.Endpoint, "endpoint", "unix://csi/csi.sock", "CSI endpoint",
+		&config.Endpoint, "endpoint", "unix:///plugin/csi.sock", "CSI endpoint",
 	)
 
 	cmd.PersistentFlags().StringVar(
-		&config.DriverName, "name", "jiva-csi-driver", "Name of this driver",
+		&config.DriverName, "name", "", "Name of this driver",
 	)
 
 	cmd.PersistentFlags().StringVar(
-		&config.PluginType, "plugin", "jiva-csi-plugin", "Type of this driver i.e. controller or node",
+		&config.PluginType, "plugin", "", "Type of this driver i.e. controller or node",
 	)
 
-	cmd.Flags().BoolVarP(
-		&enableISCSIDebug, "enableISCSIDebug", "d", false, "Enable iscsi debug logs",
+	cmd.Flags().BoolVar(
+		&enableISCSIDebug, "enableiscsidebug", false, "Enable iscsi debug logs",
 	)
-
-	if config.PluginType == "agent" && enableISCSIDebug {
-		logrus.SetLevel(logrus.DebugLevel)
-		iscsi.EnableDebugLogging(&log2LogrusWriter{
-			entry: logrus.StandardLogger().WithField("logger", "iscsi"),
-		})
-	}
 
 	err := cmd.Execute()
 	if err != nil {
@@ -108,6 +101,13 @@ func run(config *config.Config) {
 		config.Endpoint,
 		config.NodeID,
 	)
+
+	if config.PluginType == "node" && enableISCSIDebug {
+		logrus.SetLevel(logrus.DebugLevel)
+		iscsi.EnableDebugLogging(&log2LogrusWriter{
+			entry: logrus.StandardLogger().WithField("logger", "iscsi"),
+		})
+	}
 
 	// get the kube config
 	cfg, err := k8scfg.GetConfig()

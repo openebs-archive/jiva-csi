@@ -1,0 +1,378 @@
+# Create the OpenEBS namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openebs
+---
+apiVersion: storage.k8s.io/v1beta1
+kind: CSIDriver
+metadata:
+  name: jiva.csi.openebs.com
+spec:
+  attachRequired: true
+  podInfoOnMount: true
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: jivavolumes.openebs.io
+spec:
+  group: openebs.io
+  names:
+    kind: JivaVolume
+    listKind: JivaVolumeList
+    plural: jivavolumes
+    singular: jv
+  scope: Namespaced
+  # commenting out so that we can set the status while creating CR
+  #subresources:
+  #  status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          type: object
+        status:
+          type: object
+  version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+---
+##############################################
+###########                       ############
+###########   Controller plugin   ############
+###########                       ############
+##############################################
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: openebs-jiva-csi-sa
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openebs-jiva-csi-role
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes", "services"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: ["*"]
+    resources: ["jivavolumes"]
+    verbs: ["*"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openebs-jiva-csi-binding
+subjects:
+  - kind: ServiceAccount
+    name: openebs-jiva-csi-sa
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: openebs-jiva-csi-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: openebs-jiva-csi-controller
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: openebs-jiva-csi-controller
+      role: openebs-jiva-csi
+  serviceName: "openebs-jiva-csi"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: openebs-jiva-csi-controller
+        role: openebs-jiva-csi
+    spec:
+      priorityClassName: system-cluster-critical
+      serviceAccount: openebs-jiva-csi-controller-sa
+      containers:
+        - name: csi-provisioner
+          image: quay.io/k8scsi/csi-provisioner:v1.0.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--provisioner=jiva.csi.openebs.io"
+            - "--csi-address=$(ADDRESS)"
+            - "--v=5"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-attacher
+          image: quay.io/k8scsi/csi-attacher:v1.0.1
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: openebs-jiva-csi-plugin
+          image: quay.io/openebs/jiva-csi:ci
+          imagePullPolicy: Always
+          env:
+            - name: OPENEBS_JIVA_CSI_CONTROLLER
+              value: controller
+            - name: OPENEBS_JIVA_CSI_ENDPOINT
+              value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
+            - name: OPENEBS_NAMESPACE
+              value: openebs
+            - name: OPENEBS_NODEID
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          args :
+            - "--endpoint=$(OPENEBS_JIVA_CSI_ENDPOINT)"
+            - "--plugin=$(OPENEBS_JIVA_CSI_CONTROLLER)"
+            - "--name=jiva.csi.openebs.io"
+            - "--nodeid=$(OPENEBS_NODEID)"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: liveness-probe
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
+          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          args:
+          - "--csi-address=/csi/csi.sock"
+          - "--connection-timeout=3s"
+          - "--health-port=9898"
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+---
+############################## CSI- Attacher #######################
+# Attacher must be able to work with PVs, nodes and VolumeAttachments
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openebs-jiva-csi-attacher-role
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["csi.storage.k8s.io"]
+    resources: ["csinodeinfos"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments", "csinodes"]
+    verbs: ["get", "list", "watch", "update"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openebs-jiva-csi-attacher-binding
+subjects:
+  - kind: ServiceAccount
+    name: openebs-jiva-csi-controller-sa
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: openebs-jiva-csi-attacher-role
+  apiGroup: rbac.authorization.k8s.io
+---
+########################################
+###########                 ############
+###########   Node plugin   ############
+###########                 ############
+########################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openebs-jiva-csi-node-sa
+  namespace: kube-system
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openebs-jiva-csi-registrar-role
+rules:
+  - apigroups: ["csi.storage.k8s.io"]
+    resources: ["csidrivers"]
+    verbs: ["create", "delete"]
+  - apiGroups: ["*"]
+    resources: ["jivavolumes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openebs-jiva-csi-registrar-binding
+subjects:
+  - kind: ServiceAccount
+    name: openebs-jiva-csi-node-sa
+    namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: openebs-jiva-csi-registrar-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: openebs-jiva-csi-node
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: openebs-jiva-csi-node
+  template:
+    metadata:
+      labels:
+        app: openebs-jiva-csi-node
+        role: openebs-jiva-csi
+    spec:
+      priorityClassName: system-node-critical
+      serviceAccount: openebs-jiva-csi-node-sa
+      hostNetwork: true
+      containers:
+        - name: csi-node-driver-registrar
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.0.1
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)"
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "rm -rf /registration/zfs-localpv /registration/zfs-localpv-reg.sock"]
+          env:
+            - name: ADDRESS
+              value: /plugin/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: /var/lib/kubelet/plugins/zfs-localpv/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: NODE_DRIVER
+              value: openebs-jiva-csi-node
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /plugin
+            - name: registration-dir
+              mountPath: /registration
+        - name: openebs-jiva-csi-plugin
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["CAP_MKNOD", "CAP_SYS_ADMIN", "SYS_ADMIN"]
+            allowPrivilegeEscalation: true
+          image: quay.io/openebs/jiva-csi:ci
+          imagePullPolicy: Always
+          args:
+            - "--name=jiva.csi.openebs.io"
+            - "--nodeid=$(OPENEBS_NODEID)"
+            - "--endpoint=$(OPENEBS_CSI_ENDPOINT)"
+            - "--plugin=$(OPENEBS_NODE_DRIVER)"
+            - "--enableISCSIDebug=true"
+          env:
+            - name: OPENEBS_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: OPENEBS_CSI_ENDPOINT
+              value: unix:///plugin/csi.sock
+            - name: OPENEBS_NODE_DRIVER
+              value: node
+            - name: OPENEBS_NAMESPACE
+              value: openebs
+        - name: liveness-probe
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
+          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          args:
+          - "--csi-address=/csi/csi.sock"
+          - "--connection-timeout=3s"
+          - "--health-port=9898"
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /plugin
+            - name: device-dir
+              mountPath: /dev
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              # needed so that any mounts setup inside this container are
+              # propagated back to the host machine.
+              mountPropagation: "Bidirectional"
+            - name: iscsiadm-bin
+              mountPath: /sbin/iscsiadm
+            #Enable the following for Ubuntu 18.04
+            - name: iscsiadm-lib-isns-nocrypto
+              mountPath: /lib/x86_64-linux-gnu/libisns-nocrypto.so.0
+      volumes:
+        - name: device-dir
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry/
+            type: DirectoryOrCreate
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/jiva-csi/
+            type: DirectoryOrCreate
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+        - name: iscsiadm-bin
+          hostPath:
+            path: /sbin/iscsiadm
+            type: File
+        #Enable the following for Ubuntu 18.04
+        - name: iscsiadm-lib-isns-nocrypto
+          hostPath:
+            path: /lib/x86_64-linux-gnu/libisns-nocrypto.so.0
+            type: File
+---

@@ -75,7 +75,7 @@ func New(config *config.Config, cli *client.Client) *CSIDriver {
 	case "controller":
 		driver.cs = NewController(cli)
 
-	case "agent":
+	case "node":
 		driver.ns = NewNode(driver, cli)
 	}
 
