@@ -1,17 +1,19 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: openebs-jiva-csi
+  name: openebs-jiva-csi-sc
+provisioner: jiva.csi.openebs.io
 parameters:
-provisioner: openebs.io/jiva-csi
-volumeBindingMode: WaitForFirstConsumer
+  cas-type: "jiva"
+  replicaCount: "1"
+  replicaSC: "openebs-hostpath"
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: jiva-csi-demo
 spec:
-  storageClassName: openebs-jiva-csi
+  storageClassName: openebs-jiva-csi-sc
   accessModes:
     - ReadWriteOnce
   resources:

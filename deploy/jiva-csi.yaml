@@ -1,9 +1,3 @@
-# Create the OpenEBS namespace
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: openebs
----
 apiVersion: storage.k8s.io/v1beta1
 kind: CSIDriver
 metadata:
@@ -60,7 +54,7 @@ spec:
 kind: ServiceAccount
 apiVersion: v1
 metadata:
-  name: openebs-jiva-csi-sa
+  name: openebs-jiva-csi-controller-sa
   namespace: kube-system
 ---
 kind: ClusterRole
@@ -93,7 +87,7 @@ metadata:
   name: openebs-jiva-csi-binding
 subjects:
   - kind: ServiceAccount
-    name: openebs-jiva-csi-sa
+    name: openebs-jiva-csi-controller-sa
     namespace: kube-system
 roleRef:
   kind: ClusterRole
@@ -147,7 +141,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: openebs-jiva-csi-plugin
-          image: quay.io/openebs/jiva-csi:ci
+          image: utkarshmani1997/jiva-csi:ci
           imagePullPolicy: Always
           env:
             - name: OPENEBS_JIVA_CSI_CONTROLLER
@@ -176,8 +170,6 @@ spec:
           image: quay.io/k8scsi/livenessprobe:v1.1.0
           args:
           - "--csi-address=/csi/csi.sock"
-          - "--connection-timeout=3s"
-          - "--health-port=9898"
       volumes:
         - name: socket-dir
           emptyDir: {}
@@ -231,7 +223,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: openebs-jiva-csi-registrar-role
 rules:
-  - apigroups: ["csi.storage.k8s.io"]
+  - apiGroups: ["csi.storage.k8s.io"]
     resources: ["csidrivers"]
     verbs: ["create", "delete"]
   - apiGroups: ["*"]
@@ -279,18 +271,18 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "rm -rf /registration/zfs-localpv /registration/zfs-localpv-reg.sock"]
+                command: ["/bin/sh", "-c", "rm -rf /registration/jiva.csi.openebs.io /plugin/csi.sock"]
           env:
             - name: ADDRESS
               value: /plugin/csi.sock
             - name: DRIVER_REG_SOCK_PATH
-              value: /var/lib/kubelet/plugins/zfs-localpv/csi.sock
+              value: /var/lib/kubelet/plugins/jiva.csi.openebs.io/csi.sock
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
             - name: NODE_DRIVER
-              value: openebs-jiva-csi-node
+              value: openebs-jiva-csi
           volumeMounts:
             - name: plugin-dir
               mountPath: /plugin
@@ -302,14 +294,14 @@ spec:
             capabilities:
               add: ["CAP_MKNOD", "CAP_SYS_ADMIN", "SYS_ADMIN"]
             allowPrivilegeEscalation: true
-          image: quay.io/openebs/jiva-csi:ci
+          image: utkarshmani1997/jiva-csi:ci
           imagePullPolicy: Always
           args:
             - "--name=jiva.csi.openebs.io"
             - "--nodeid=$(OPENEBS_NODEID)"
             - "--endpoint=$(OPENEBS_CSI_ENDPOINT)"
             - "--plugin=$(OPENEBS_NODE_DRIVER)"
-            - "--enableISCSIDebug=true"
+            - "--enableiscsidebug=true"
           env:
             - name: OPENEBS_NODE_ID
               valueFrom:
@@ -321,19 +313,6 @@ spec:
               value: node
             - name: OPENEBS_NAMESPACE
               value: openebs
-        - name: liveness-probe
-          volumeMounts:
-          - mountPath: /csi
-            name: socket-dir
-          image: quay.io/k8scsi/livenessprobe:v1.1.0
-          args:
-          - "--csi-address=/csi/csi.sock"
-          - "--connection-timeout=3s"
-          - "--health-port=9898"
-      volumes:
-        - name: socket-dir
-          emptyDir: {}
-
           volumeMounts:
             - name: plugin-dir
               mountPath: /plugin
@@ -349,6 +328,13 @@ spec:
             #Enable the following for Ubuntu 18.04
             - name: iscsiadm-lib-isns-nocrypto
               mountPath: /lib/x86_64-linux-gnu/libisns-nocrypto.so.0
+        - name: liveness-probe
+          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          args:
+          - "--csi-address=/plugin/csi.sock"
+          volumeMounts:
+          - mountPath: /plugin
+            name: plugin-dir
       volumes:
         - name: device-dir
           hostPath:
@@ -360,7 +346,7 @@ spec:
             type: DirectoryOrCreate
         - name: plugin-dir
           hostPath:
-            path: /var/lib/kubelet/plugins/jiva-csi/
+            path: /var/lib/kubelet/plugins/jiva.csi.openebs.io/
             type: DirectoryOrCreate
         - name: pods-mount-dir
           hostPath:
@@ -375,4 +361,6 @@ spec:
           hostPath:
             path: /lib/x86_64-linux-gnu/libisns-nocrypto.so.0
             type: File
+        - name: socket-dir
+          emptyDir: {}
 ---

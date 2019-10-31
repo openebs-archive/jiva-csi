@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/openebs/jiva-csi/pkg/jivavolume"
 	"github.com/openebs/jiva-operator/pkg/apis"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
 	"github.com/sirupsen/logrus"
@@ -108,9 +109,9 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	name := req.GetName()
 	sc := req.GetParameters()["replicaSC"]
 	ns := "openebs"
-	jiva := new(Jiva).withKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
-		withNameAndNamespace(name, ns).
-		withSpec(jv.JivaVolumeSpec{
+	jiva := jivavolume.New().WithKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
+		WithNameAndNamespace(name, ns).
+		WithSpec(jv.JivaVolumeSpec{
 			PV:       name,
 			Capacity: req.GetCapacityRange().GetRequiredBytes(),
 			ReplicaSC: func(sc string) string {
@@ -122,12 +123,12 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 			ReplicaResource: func(req *csi.CreateVolumeRequest) v1.ResourceRequirements {
 				return v1.ResourceRequirements{
 					Requests: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(HasResourceParameters(req)("replicaMinCPU")),
-						v1.ResourceMemory: resource.MustParse(HasResourceParameters(req)("replicaMinMemory")),
+						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMinCPU")),
+						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMinMemory")),
 					},
 					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(HasResourceParameters(req)("replicaMaxCPU")),
-						v1.ResourceMemory: resource.MustParse(HasResourceParameters(req)("replicaMaxMemory")),
+						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMaxCPU")),
+						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMaxMemory")),
 					},
 				}
 			}(req),
@@ -135,23 +136,23 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 			TargetResource: func(req *csi.CreateVolumeRequest) v1.ResourceRequirements {
 				return v1.ResourceRequirements{
 					Requests: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(HasResourceParameters(req)("targetMinCPU")),
-						v1.ResourceMemory: resource.MustParse(HasResourceParameters(req)("targetMinMemory")),
+						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("targetMinCPU")),
+						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("targetMinMemory")),
 					},
 					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(HasResourceParameters(req)("targetMaxCPU")),
-						v1.ResourceMemory: resource.MustParse(HasResourceParameters(req)("targetMaxMemory")),
+						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("targetMaxCPU")),
+						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("targetMaxMemory")),
 					},
 				}
 			}(req),
 			ReplicationFactor: req.GetParameters()["replicaCount"],
 		})
 
-	if jiva.errs != nil {
-		return fmt.Errorf("failed to create JivaVolume CR, err: %v", jiva.errs)
+	if jiva.Errs != nil {
+		return fmt.Errorf("failed to create JivaVolume CR, err: %v", jiva.Errs)
 	}
 
-	obj := jiva.instance()
+	obj := jiva.Instance()
 	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, obj)
 	if err != nil && errors.IsNotFound(err) {
 		logrus.Infof("Creating a new JivaVolume CR, name: %v, namespace: %v", name, ns)

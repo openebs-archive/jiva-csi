@@ -119,7 +119,7 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 				}
 				return nil, fmt.Errorf("Volume is not ready: replicas may not be connected")
 			}
-			return nil, fmt.Errorf("Volume is not ready: volume status is unknown")
+			return nil, fmt.Errorf("Volume is not ready: volume status is %s", instance.Status.Status)
 		}
 	}
 }
@@ -206,7 +206,7 @@ func (ns *node) NodeStageVolume(
 	// reachable
 	logrus.Info("NodeStageVolume: wait for the iscsi target to be ready")
 	if err := ns.waitForVolumeToBeReachable(
-		instance.Spec.ISCSISpec.TargetIP,
+		instance.Spec.ISCSISpec.TargetPortals[0],
 	); err != nil {
 		return nil,
 			status.Error(codes.Internal, err.Error())
