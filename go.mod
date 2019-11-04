@@ -19,6 +19,7 @@ require (
 )
 
 replace (
+	github.com/kubernetes-csi/csi-lib-iscsi => github.com/utkarshmani1997/csi-lib-iscsi v0.0.0-20191102050824-b5a02fd3deca
 	github.com/openebs/jiva-operator => github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191028154631-a5835f8bf015
 	k8s.io/api => k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190620085554-14e95df34f1f

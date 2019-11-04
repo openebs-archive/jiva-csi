@@ -25,6 +25,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/kubernetes-csi/csi-lib-iscsi/iscsi"
 	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
+	"github.com/openebs/jiva-csi/pkg/request"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -61,28 +62,32 @@ var (
 // node is the server implementation
 // for CSI NodeServer
 type node struct {
-	client  *client.Client
-	driver  *CSIDriver
-	mounter *NodeMounter
+	client           *client.Client
+	driver           *CSIDriver
+	mounter          *NodeMounter
+	volumeTransition *request.Transition
 }
 
 // NewNode returns a new instance
 // of CSI NodeServer
 func NewNode(d *CSIDriver, cli *client.Client) csi.NodeServer {
 	return &node{
-		client: cli,
-		driver: d,
+		client:           cli,
+		driver:           d,
+		mounter:          newNodeMounter(),
+		volumeTransition: request.NewTransition(),
 	}
 }
 
 func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 	connector := iscsi.Connector{
-		VolumeName:    instance.Name,
-		TargetIqn:     instance.Spec.ISCSISpec.Iqn,
-		Port:          fmt.Sprint(instance.Spec.ISCSISpec.TargetPort),
-		Lun:           instance.Spec.ISCSISpec.Lun,
+		VolumeName: instance.Name,
+		TargetIqn:  instance.Spec.ISCSISpec.Iqn,
+		Lun:        instance.Spec.ISCSISpec.Lun,
+		//Port:          fmt.Sprint(instance.Spec.ISCSISpec.TargetPort),
 		Interface:     instance.Spec.ISCSISpec.ISCSIInterface,
 		TargetPortals: instance.Spec.ISCSISpec.TargetPortals,
+		Discovery:     true,
 	}
 	devicePath, err := iscsi.Connect(connector)
 	if err != nil {
@@ -194,6 +199,16 @@ func (ns *node) NodeStageVolume(
 	if len(stagingPath) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "staging path is empty")
 	}
+
+	if ok := ns.volumeTransition.Insert(req); !ok {
+		msg := fmt.Sprintf("request to stage volume=%q is already in progress", volumeID)
+		return nil, status.Error(codes.Internal, msg)
+	}
+	defer func() {
+		logrus.Infof("NodeStageVolume: volume=%q operation finished", req.GetVolumeId())
+		ns.volumeTransition.Delete(req)
+	}()
+
 	// Check if volume is ready to serve IOs,
 	// info is fetched from the JivaVolume CR
 	logrus.Info("NodeStageVolume: wait for the volume to be ready")
@@ -221,6 +236,11 @@ func (ns *node) NodeStageVolume(
 	instance.Spec.MountInfo.DevicePath = devicePath
 	instance.Spec.MountInfo.Path = stagingPath
 	if err := ns.client.UpdateJivaVolume(instance); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if err := os.MkdirAll(stagingPath, 0750); err != nil {
+		logrus.Errorf("failed to mkdir %s, error: %v", stagingPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -437,18 +457,6 @@ func (ns *node) NodeUnpublishVolume(
 	target := req.GetTargetPath()
 	if len(target) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
-	}
-
-	notMnt, err := ns.mounter.IsLikelyNotMountPoint(target)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, status.Error(codes.NotFound, "targetpath not found")
-		}
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	if !notMnt {
-		return nil, status.Error(codes.Internal, "Volume not mounted")
 	}
 
 	logrus.Infof("NodeUnpublishVolume: unmounting %s", target)
