@@ -29,6 +29,7 @@ import (
 	"github.com/openebs/jiva-csi/version"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"k8s.io/klog"
 	k8scfg "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
@@ -60,7 +61,8 @@ var enableISCSIDebug bool
  */
 func main() {
 	var config = config.Default()
-
+	// initializing klog for the kubernetes libraries used
+	klog.InitFlags(nil)
 	cmd := &cobra.Command{
 		Use:   "jiva-csi-driver",
 		Short: "driver for provisioning jiva volume",

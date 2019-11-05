@@ -162,6 +162,8 @@ spec:
             - "--plugin=$(OPENEBS_JIVA_CSI_CONTROLLER)"
             - "--name=jiva.csi.openebs.io"
             - "--nodeid=$(OPENEBS_NODEID)"
+            # logging level for klog library used in k8s packages
+            # - "--v=5"
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -306,7 +308,10 @@ spec:
             - "--nodeid=$(OPENEBS_NODEID)"
             - "--endpoint=$(OPENEBS_CSI_ENDPOINT)"
             - "--plugin=$(OPENEBS_NODE_DRIVER)"
+            # enableiscsidebug is used to enable debug logs for iscsi operations
             - "--enableiscsidebug=true"
+            # logging level for klog library used in k8s packages
+            # - "--v=5"
           env:
             - name: OPENEBS_NODE_ID
               valueFrom:

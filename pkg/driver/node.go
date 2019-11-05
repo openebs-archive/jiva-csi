@@ -81,14 +81,15 @@ func NewNode(d *CSIDriver, cli *client.Client) csi.NodeServer {
 
 func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 	connector := iscsi.Connector{
-		VolumeName: instance.Name,
-		TargetIqn:  instance.Spec.ISCSISpec.Iqn,
-		Lun:        instance.Spec.ISCSISpec.Lun,
-		//Port:          fmt.Sprint(instance.Spec.ISCSISpec.TargetPort),
+		VolumeName:    instance.Name,
+		TargetIqn:     instance.Spec.ISCSISpec.Iqn,
+		Lun:           instance.Spec.ISCSISpec.Lun,
 		Interface:     instance.Spec.ISCSISpec.ISCSIInterface,
 		TargetPortals: instance.Spec.ISCSISpec.TargetPortals,
 		Discovery:     true,
 	}
+
+	logrus.Debugf("NodeStageVolume: attach disk with config: {%+v}", connector)
 	devicePath, err := iscsi.Connect(connector)
 	if err != nil {
 		return "", err
@@ -104,12 +105,12 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 	var retry int32
 	for {
 		if err := ns.client.Set(); err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
+			return nil, err
 		}
 
 		instance, err := ns.client.GetJivaVolume(volID)
 		if err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
+			return nil, err
 		}
 
 		time.Sleep(2 * time.Second)
@@ -169,7 +170,7 @@ func (ns *node) NodeStageVolume(
 	req *csi.NodeStageVolumeRequest,
 ) (*csi.NodeStageVolumeResponse, error) {
 
-	logrus.Infof("NodeStageVolume: called with args %+v", *req)
+	logrus.Debugf("NodeStageVolume: called with args %+v", *req)
 
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -200,35 +201,37 @@ func (ns *node) NodeStageVolume(
 		return nil, status.Error(codes.InvalidArgument, "staging path is empty")
 	}
 
+	logrus.Infof("NodeStageVolume: start volume: {%q} operation", req.GetVolumeId())
 	if ok := ns.volumeTransition.Insert(req); !ok {
 		msg := fmt.Sprintf("request to stage volume=%q is already in progress", volumeID)
 		return nil, status.Error(codes.Internal, msg)
 	}
 	defer func() {
-		logrus.Infof("NodeStageVolume: volume=%q operation finished", req.GetVolumeId())
+		logrus.Infof("NodeStageVolume: volume: {%q} operation finished", req.GetVolumeId())
 		ns.volumeTransition.Delete(req)
 	}()
 
 	// Check if volume is ready to serve IOs,
 	// info is fetched from the JivaVolume CR
-	logrus.Info("NodeStageVolume: wait for the volume to be ready")
+	logrus.Debug("NodeStageVolume: wait for the volume to be ready")
 	instance, err := ns.waitForVolumeToBeReady(volumeID)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 
 	// A temporary TCP connection is made to the volume to check if its
 	// reachable
-	logrus.Info("NodeStageVolume: wait for the iscsi target to be ready")
+	logrus.Debug("NodeStageVolume: wait for the iscsi target to be ready")
 	if err := ns.waitForVolumeToBeReachable(
 		instance.Spec.ISCSISpec.TargetPortals[0],
 	); err != nil {
 		return nil,
-			status.Error(codes.Internal, err.Error())
+			status.Error(codes.FailedPrecondition, err.Error())
 	}
 
 	devicePath, err := ns.attachDisk(instance)
 	if err != nil {
+		logrus.Errorf("NodeStageVolume: failed to attachDisk for volume %v, err: %v", req.GetVolumeId(), err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -244,6 +247,7 @@ func (ns *node) NodeStageVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	logrus.Info("NodeStageVolume: start format and mount operation")
 	if err := ns.formatAndMount(req, instance.Spec.MountInfo.DevicePath); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -259,6 +263,7 @@ func (ns *node) NodeUnstageVolume(
 	ctx context.Context,
 	req *csi.NodeUnstageVolumeRequest,
 ) (*csi.NodeUnstageVolumeResponse, error) {
+	logrus.Debugf("NodeUnStageVolume: called with args %+v", *req)
 
 	volID := req.GetVolumeId()
 	if volID == "" {
@@ -295,7 +300,7 @@ func (ns *node) NodeUnstageVolume(
 		logrus.Warningf("NodeUnstageVolume: found %d references to device %s mounted at target path %s", refCount, dev, target)
 	}
 
-	logrus.Infof("NodeUnstageVolume: unmounting %s", target)
+	logrus.Debugf("NodeUnstageVolume: unmounting %s", target)
 	err = ns.mounter.Unmount(target)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not unmount target %q: %v", target, err)
@@ -306,6 +311,7 @@ func (ns *node) NodeUnstageVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	logrus.Infof("NodeUnstageVolume: disconnect from iscsi target: %s", target)
 	if err := iscsi.Disconnect(instance.Spec.ISCSISpec.Iqn, instance.Spec.ISCSISpec.TargetPortals); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -314,6 +320,7 @@ func (ns *node) NodeUnstageVolume(
 		logrus.Errorf("Failed to remove mount path, err: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
 	logrus.Infof("NodeUnstageVolume: detaching device %v is finished", instance.Spec.MountInfo.DevicePath)
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
@@ -325,7 +332,7 @@ func (ns *node) formatAndMount(req *csi.NodeStageVolumeRequest, devicePath strin
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mntPath)
 	if err != nil && !os.IsNotExist(err) {
 		if err := os.MkdirAll(mntPath, 0750); err != nil {
-			logrus.Errorf("iscsi: failed to mkdir %s, error", mntPath)
+			logrus.Errorf("failed to mkdir %s, error", mntPath)
 			return err
 		}
 	}
@@ -360,7 +367,7 @@ func (ns *node) NodePublishVolume(
 	req *csi.NodePublishVolumeRequest,
 ) (*csi.NodePublishVolumeResponse, error) {
 
-	logrus.Infof("NodePublishVolume: called with args %+v", *req)
+	logrus.Debugf("NodePublishVolume: called with args %+v", *req)
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.FailedPrecondition, "Volume ID not provided")

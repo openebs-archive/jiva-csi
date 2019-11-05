@@ -55,10 +55,11 @@ func (cs *controller) CreateVolume(
 	req *csi.CreateVolumeRequest,
 ) (*csi.CreateVolumeResponse, error) {
 
-	logrus.Infof("received request {%+v} to create volume", req)
+	logrus.Debugf("received request {%+v} to create volume", req)
 
 	// set client each time to avoid caching issue
 	if err := cs.client.Set(); err != nil {
+		logrus.Errorf("CreateVolume: failed to set the kubeclient, err: %v", err)
 		return nil, status.Error(codes.Internal, err.Error())
 
 	}
@@ -72,6 +73,7 @@ func (cs *controller) CreateVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	logrus.Infof("CreateVolume: volume: %v is created", req.GetName())
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:      req.GetName(),
