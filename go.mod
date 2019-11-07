@@ -6,22 +6,22 @@ require (
 	github.com/container-storage-interface/spec v1.1.0
 	github.com/kubernetes-csi/csi-lib-iscsi v0.0.0-20190415173011-c545557492f4
 	github.com/kubernetes-csi/csi-lib-utils v0.6.1
-	github.com/openebs/jiva-operator v0.0.0-20191023100040-c1d928c87c4f
-	github.com/sirupsen/logrus v1.2.0
-	github.com/spf13/cobra v0.0.0-20180319062004-c439c4fa0937
-	golang.org/x/net v0.0.0-20190311183353-d8887717615a
-	google.golang.org/grpc v1.13.0
+	github.com/openebs/jiva-operator v0.0.0-00010101000000-000000000000
+	github.com/sirupsen/logrus v1.4.2
+	github.com/spf13/cobra v0.0.5
+	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
+	google.golang.org/grpc v1.21.0
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
-	k8s.io/client-go v0.0.0
+	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/klog v0.3.3
-	k8s.io/kubernetes v1.15.0
+	k8s.io/kubernetes v1.15.4
 	sigs.k8s.io/controller-runtime v0.3.0
 )
 
 replace (
 	github.com/kubernetes-csi/csi-lib-iscsi => github.com/utkarshmani1997/csi-lib-iscsi v0.0.0-20191102050824-b5a02fd3deca
-	github.com/openebs/jiva-operator => github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191028154631-a5835f8bf015
+	github.com/openebs/jiva-operator => github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191107051125-52e850f813b5
 	k8s.io/api => k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190620085554-14e95df34f1f
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719

@@ -55,13 +55,9 @@ func (cs *controller) CreateVolume(
 	req *csi.CreateVolumeRequest,
 ) (*csi.CreateVolumeResponse, error) {
 
-	logrus.Debugf("received request {%+v} to create volume", req)
-
 	// set client each time to avoid caching issue
 	if err := cs.client.Set(); err != nil {
-		logrus.Errorf("CreateVolume: failed to set the kubeclient, err: %v", err)
-		return nil, status.Error(codes.Internal, err.Error())
-
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
 	}
 
 	if err := cs.validateVolumeCreateReq(req); err != nil {
@@ -73,7 +69,7 @@ func (cs *controller) CreateVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	logrus.Infof("CreateVolume: volume: %v is created", req.GetName())
+	logrus.Infof("CreateVolume: volume: {%v} is created", req.GetName())
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:      req.GetName(),
@@ -86,8 +82,17 @@ func (cs *controller) CreateVolume(
 func (cs *controller) DeleteVolume(
 	ctx context.Context,
 	req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+	// set client each time to avoid caching issue
+	if err := cs.client.Set(); err != nil {
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
 
-	logrus.Infof("received request to delete volume {%s}", req.VolumeId)
+	}
+
+	if err := cs.client.DeleteJivaVolume(req); err != nil {
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to delete volume {%v}, err: %v", req.VolumeId, err)
+	}
+
+	logrus.Infof("DeleteVolume: volume {%s} is deleted", req.VolumeId)
 
 	return &csi.DeleteVolumeResponse{}, nil
 }

@@ -48,13 +48,13 @@ print-variables:
 
 .get:
 	rm -rf ./build/bin/
-	GO111MODULE=on go mod download
+	go mod download
 
 deps: .get
-	GO111MODULE=on go mod vendor
+	go mod vendor
 
 build: deps test
-	GO111MODULE=on GOOS=linux go build -a -ldflags '$(LDFLAGS)' -o ./build/bin/$(PLUGIN_NAME) ./cmd/csi/main.go
+	GOOS=linux go build -a -ldflags '$(LDFLAGS)' -o ./build/bin/$(PLUGIN_NAME) ./cmd/csi/main.go
 
 image: build
 	docker build -f ./build/Dockerfile -t $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) .

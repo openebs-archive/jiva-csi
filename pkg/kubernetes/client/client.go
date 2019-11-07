@@ -100,14 +100,25 @@ func (cl *Client) UpdateJivaVolume(cr *jv.JivaVolume) error {
 	return nil
 }
 
+func getDefaultLabels(pv string) map[string]string {
+	return map[string]string{
+		"openebs.io/persistent-volume": pv,
+		"openebs.io/component":         "jiva-volume",
+	}
+}
+
 // CreateJivaVolume check whether JivaVolume CR already exists and creates one
 // if it doesn't exist.
 func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	name := req.GetName()
 	sc := req.GetParameters()["replicaSC"]
-	ns := "openebs"
+	ns, ok := req.GetParameters()["namespace"]
+	if !ok {
+		ns = "openebs"
+	}
 	jiva := jivavolume.New().WithKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
 		WithNameAndNamespace(name, ns).
+		WithLabels(getDefaultLabels(name)).
 		WithSpec(jv.JivaVolumeSpec{
 			PV:       name,
 			Capacity: req.GetCapacityRange().GetRequiredBytes(),
@@ -146,22 +157,19 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 		})
 
 	if jiva.Errs != nil {
-		logrus.Errorf("Failed to build JivaVolume object, err: %v", jiva.Errs)
-		return fmt.Errorf("failed to create JivaVolume CR, err: %v", jiva.Errs)
+		return fmt.Errorf("failed to build JivaVolume CR, err: %v", jiva.Errs)
 	}
 
 	obj := jiva.Instance()
 	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, obj)
 	if err != nil && errors.IsNotFound(err) {
-		logrus.Infof("Creating a new JivaVolume CR, name: %v, namespace: %v", name, ns)
+		logrus.Infof("Creating a new JivaVolume CR {name: %v, namespace: %v}", name, ns)
 		err = cl.client.Create(context.TODO(), obj)
 		if err != nil {
-			logrus.Errorf("Failed to create JivaVolume CR: {%+v}, err: %v", obj, err)
 			return fmt.Errorf("failed to create JivaVolume CR, err: %v", err)
 		}
 		return nil
 	} else if err != nil {
-		logrus.Errorf("Failed to get JivaVolume CR: {%+v}, err: %v", obj, err)
 		return fmt.Errorf("failed to get the JivaVolume details, err: %v", err)
 	}
 	return nil
@@ -170,20 +178,24 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 // DeleteJivaVolume delete the JivaVolume CR
 func (cl *Client) DeleteJivaVolume(req *csi.DeleteVolumeRequest) error {
 	volumeID := req.GetVolumeId()
-	obj := &jv.JivaVolume{}
-	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: volumeID, Namespace: "openebs"}, obj)
+	obj := &jv.JivaVolumeList{}
+	opts := []client.ListOption{
+		client.MatchingLabels(getDefaultLabels(volumeID)),
+	}
+	err := cl.client.List(context.TODO(), obj, opts...)
+	//	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: volumeID, Namespace: "openebs"}, obj)
 	if err != nil && errors.IsNotFound(err) {
-		logrus.Warningf("Failed to delete JivaVolume CR: {%v}, err: %v, ignore deletion...", volumeID, err)
+		logrus.Warningf("DeleteVolume: failed to list JivaVolume CR: {%v}, err: %v, ignore deletion...", volumeID, err)
 		return nil
 	} else if err != nil {
-		logrus.Errorf("Failed to get JivaVolume CR: {%v}, err: %v", volumeID, err)
-		return fmt.Errorf("failed to get the JivaVolume CR details: %v, err: %v", volumeID, err)
+		return err
 	}
 
-	err = cl.client.Delete(context.TODO(), obj)
+	logrus.Debugf("DeleteVolume: object: {%+v}", obj)
+	instance := obj.Items[0].DeepCopy()
+	err = cl.client.Delete(context.TODO(), instance)
 	if err != nil {
-		logrus.Errorf("Failed to get JivaVolume CR: {%v}, err: %v", volumeID, err)
-		return fmt.Errorf("failed to delete JivaVolume CR: %v, err: %v", volumeID, err)
+		return err
 	}
 	return nil
 }

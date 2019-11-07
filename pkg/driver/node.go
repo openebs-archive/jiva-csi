@@ -141,7 +141,7 @@ func (ns *node) waitForVolumeToBeReachable(targetIP string) error {
 		// Create a connection to test if the iSCSI Portal is reachable,
 		if conn, err = net.Dial("tcp", targetIP); err == nil {
 			conn.Close()
-			logrus.Debug("Volume is reachable to create connections")
+			logrus.Debugf("Target {%v} is reachable to create connections", targetIP)
 			return nil
 		}
 		// wait until the iSCSI targetPortal is reachable
@@ -155,7 +155,7 @@ func (ns *node) waitForVolumeToBeReachable(targetIP string) error {
 			// based on the kubelets retrying logic. Kubelet retries to publish
 			// volume after every 14s )
 			return fmt.Errorf(
-				"iSCSI Target not reachable, TargetPortal %v, err:%v",
+				"iSCSI Target not reachable, TargetPortal {%v}, err:%v",
 				targetIP, err)
 		}
 	}
@@ -169,8 +169,6 @@ func (ns *node) NodeStageVolume(
 	ctx context.Context,
 	req *csi.NodeStageVolumeRequest,
 ) (*csi.NodeStageVolumeResponse, error) {
-
-	logrus.Debugf("NodeStageVolume: called with args %+v", *req)
 
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -263,7 +261,6 @@ func (ns *node) NodeUnstageVolume(
 	ctx context.Context,
 	req *csi.NodeUnstageVolumeRequest,
 ) (*csi.NodeUnstageVolumeResponse, error) {
-	logrus.Debugf("NodeUnStageVolume: called with args %+v", *req)
 
 	volID := req.GetVolumeId()
 	if volID == "" {
@@ -367,7 +364,6 @@ func (ns *node) NodePublishVolume(
 	req *csi.NodePublishVolumeRequest,
 ) (*csi.NodePublishVolumeResponse, error) {
 
-	logrus.Debugf("NodePublishVolume: called with args %+v", *req)
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.FailedPrecondition, "Volume ID not provided")
@@ -455,7 +451,6 @@ func (ns *node) NodeUnpublishVolume(
 	req *csi.NodeUnpublishVolumeRequest,
 ) (*csi.NodeUnpublishVolumeResponse, error) {
 
-	logrus.Infof("NodeUnpublishVolume: called with args %+v", *req)
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
@@ -495,7 +490,6 @@ func (ns *node) NodeGetCapabilities(
 	req *csi.NodeGetCapabilitiesRequest,
 ) (*csi.NodeGetCapabilitiesResponse, error) {
 
-	logrus.Infof("NodeGetCapabilities: called with args %+v", *req)
 	var caps []*csi.NodeServiceCapability
 	for _, cap := range nodeCaps {
 		c := &csi.NodeServiceCapability{

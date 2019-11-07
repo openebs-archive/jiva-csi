@@ -75,6 +75,16 @@ func (j *Jiva) WithNameAndNamespace(name, ns string) *Jiva {
 	return j
 }
 
+func (j *Jiva) WithLabels(labels map[string]string) *Jiva {
+	if labels != nil {
+		j.jvObj.Labels = labels
+	} else {
+		j.Errs = append(j.Errs,
+			errors.New("failed to initialize JivaVolume: labels are missing"))
+	}
+	return j
+}
+
 // ResourceParameters is a function type which return resource values
 type ResourceParameters func(param string) string
 
