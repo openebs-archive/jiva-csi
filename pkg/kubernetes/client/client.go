@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/docker/go-units"
 	"github.com/openebs/jiva-csi/pkg/jivavolume"
 	"github.com/openebs/jiva-operator/pkg/apis"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
@@ -34,8 +35,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
+const (
+	defaultReplicaCount = "3"
+	defaultReplicaSC    = "openebs-hostpath"
+	defaultNS           = "openebs"
+)
+
 // Client is the wrapper over the k8s client that will be used by
-// NDM to interface with etcd
+// jiva-csi to interface with etcd
 type Client struct {
 	cfg    *rest.Config
 	client client.Client
@@ -112,19 +119,22 @@ func getDefaultLabels(pv string) map[string]string {
 func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	name := req.GetName()
 	sc := req.GetParameters()["replicaSC"]
+	rf := req.GetParameters()["replicaCount"]
 	ns, ok := req.GetParameters()["namespace"]
 	if !ok {
-		ns = "openebs"
+		ns = defaultNS
 	}
+
+	capacity := units.BytesSize(float64(req.GetCapacityRange().RequiredBytes))
 	jiva := jivavolume.New().WithKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
 		WithNameAndNamespace(name, ns).
 		WithLabels(getDefaultLabels(name)).
 		WithSpec(jv.JivaVolumeSpec{
 			PV:       name,
-			Capacity: req.GetCapacityRange().GetRequiredBytes(),
+			Capacity: capacity,
 			ReplicaSC: func(sc string) string {
 				if sc == "" {
-					return "openebs-hostpath"
+					return defaultReplicaSC
 				}
 				return sc
 			}(sc),
@@ -153,7 +163,12 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 					},
 				}
 			}(req),
-			ReplicationFactor: req.GetParameters()["replicaCount"],
+			ReplicationFactor: func(rf string) string {
+				if rf == "" {
+					return defaultReplicaCount
+				}
+				return rf
+			}(rf),
 		})
 
 	if jiva.Errs != nil {
@@ -182,19 +197,17 @@ func (cl *Client) DeleteJivaVolume(req *csi.DeleteVolumeRequest) error {
 	opts := []client.ListOption{
 		client.MatchingLabels(getDefaultLabels(volumeID)),
 	}
-	err := cl.client.List(context.TODO(), obj, opts...)
-	//	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: volumeID, Namespace: "openebs"}, obj)
-	if err != nil && errors.IsNotFound(err) {
-		logrus.Warningf("DeleteVolume: failed to list JivaVolume CR: {%v}, err: %v, ignore deletion...", volumeID, err)
-		return nil
-	} else if err != nil {
+	if err := cl.client.List(context.TODO(), obj, opts...); err != nil {
 		return err
 	}
 
+	if len(obj.Items) == 0 {
+		logrus.Warningf("DeleteVolume: JivaVolume: {%v}, not found, ignore deletion...", volumeID)
+		return nil
+	}
 	logrus.Debugf("DeleteVolume: object: {%+v}", obj)
 	instance := obj.Items[0].DeepCopy()
-	err = cl.client.Delete(context.TODO(), instance)
-	if err != nil {
+	if err := cl.client.Delete(context.TODO(), instance); err != nil {
 		return err
 	}
 	return nil

@@ -37,6 +37,7 @@ spec:
       labels:
         name: fio
     spec:
+      nodeName: gke-utkarsh-csi-default-pool-bc32d6bc-6050
       containers:
       - name: perfrunner
         image: openebs/tests-fio

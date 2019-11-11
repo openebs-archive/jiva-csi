@@ -59,6 +59,12 @@ var (
 	}
 )
 
+type nodeStageRequest struct {
+	stagingPath string
+	fsType      string
+	volumeID    string
+}
+
 // node is the server implementation
 // for CSI NodeServer
 type node struct {
@@ -113,24 +119,24 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 			return nil, err
 		}
 
-		time.Sleep(2 * time.Second)
 		retry++
-		if instance.Status.Phase == jv.JivaVolumePhaseCreated {
+		if instance.Status.Phase == jv.JivaVolumePhaseCreated && instance.Status.Status == "RW" {
 			return instance, nil
 		} else if retry > MaxRetryCount {
 			if instance.Status.Status == "RO" {
 				status := instance.Status.ReplicaStatuses
-				if status != nil {
-					return nil, fmt.Errorf("Volume is RO: replica status: %+v", status)
+				if len(status) != 0 {
+					return nil, fmt.Errorf("Volume is RO: replica status: {%+v}", status)
 				}
 				return nil, fmt.Errorf("Volume is not ready: replicas may not be connected")
 			}
 			return nil, fmt.Errorf("Volume is not ready: volume status is %s", instance.Status.Status)
 		}
+		time.Sleep(2 * time.Second)
 	}
 }
 
-func (ns *node) waitForVolumeToBeReachable(targetIP string) error {
+func (ns *node) waitForVolumeToBeReachable(targetPortal string) error {
 	var (
 		retries int
 		err     error
@@ -139,9 +145,9 @@ func (ns *node) waitForVolumeToBeReachable(targetIP string) error {
 
 	for {
 		// Create a connection to test if the iSCSI Portal is reachable,
-		if conn, err = net.Dial("tcp", targetIP); err == nil {
+		if conn, err = net.Dial("tcp", targetPortal); err == nil {
 			conn.Close()
-			logrus.Debugf("Target {%v} is reachable to create connections", targetIP)
+			logrus.Debugf("Target {%v} is reachable to create connections", targetPortal)
 			return nil
 		}
 		// wait until the iSCSI targetPortal is reachable
@@ -156,9 +162,46 @@ func (ns *node) waitForVolumeToBeReachable(targetIP string) error {
 			// volume after every 14s )
 			return fmt.Errorf(
 				"iSCSI Target not reachable, TargetPortal {%v}, err:%v",
-				targetIP, err)
+				targetPortal, err)
 		}
 	}
+}
+
+func (ns *node) validateStagingReq(req *csi.NodeStageVolumeRequest) (nodeStageRequest, error) {
+	volumeID := req.GetVolumeId()
+	if len(volumeID) == 0 {
+		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	}
+
+	volCap := req.GetVolumeCapability()
+	if volCap == nil {
+		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume capability not provided")
+	}
+
+	if !isValidVolumeCapabilities([]*csi.VolumeCapability{volCap}) {
+		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume capability not supported")
+	}
+
+	mount := volCap.GetMount()
+	if mount == nil {
+		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "NodeStageVolume: mount is nil within volume capability")
+	}
+
+	fsType := mount.GetFsType()
+	if len(fsType) == 0 {
+		fsType = defaultFsType
+	}
+
+	stagingPath := req.GetStagingTargetPath()
+	if len(stagingPath) == 0 {
+		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "staging path is empty")
+	}
+
+	return nodeStageRequest{
+		volumeID:    volumeID,
+		fsType:      fsType,
+		stagingPath: stagingPath,
+	}, nil
 }
 
 // NodeStageVolume mounts the volume on the staging
@@ -170,49 +213,24 @@ func (ns *node) NodeStageVolume(
 	req *csi.NodeStageVolumeRequest,
 ) (*csi.NodeStageVolumeResponse, error) {
 
-	volumeID := req.GetVolumeId()
-	if len(volumeID) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	reqParam, err := ns.validateStagingReq(req)
+	if err != nil {
+		return nil, err
 	}
-
-	volCap := req.GetVolumeCapability()
-	if volCap == nil {
-		return nil, status.Error(codes.InvalidArgument, "Volume capability not provided")
-	}
-
-	if !isValidVolumeCapabilities([]*csi.VolumeCapability{volCap}) {
-		return nil, status.Error(codes.InvalidArgument, "Volume capability not supported")
-	}
-
-	mount := volCap.GetMount()
-	if mount == nil {
-		return nil, status.Error(codes.InvalidArgument, "NodeStageVolume: mount is nil within volume capability")
-	}
-
-	fsType := mount.GetFsType()
-	if len(fsType) == 0 {
-		fsType = defaultFsType
-	}
-
-	stagingPath := req.GetStagingTargetPath()
-	if len(stagingPath) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "staging path is empty")
-	}
-
-	logrus.Infof("NodeStageVolume: start volume: {%q} operation", req.GetVolumeId())
+	logrus.Infof("NodeStageVolume: start volume: {%q} operation", reqParam.volumeID)
 	if ok := ns.volumeTransition.Insert(req); !ok {
-		msg := fmt.Sprintf("request to stage volume=%q is already in progress", volumeID)
+		msg := fmt.Sprintf("request to stage volume=%q is already in progress", reqParam.volumeID)
 		return nil, status.Error(codes.Internal, msg)
 	}
 	defer func() {
-		logrus.Infof("NodeStageVolume: volume: {%q} operation finished", req.GetVolumeId())
+		logrus.Infof("NodeStageVolume: volume: {%q} operation finished", reqParam.volumeID)
 		ns.volumeTransition.Delete(req)
 	}()
 
 	// Check if volume is ready to serve IOs,
 	// info is fetched from the JivaVolume CR
 	logrus.Debug("NodeStageVolume: wait for the volume to be ready")
-	instance, err := ns.waitForVolumeToBeReady(volumeID)
+	instance, err := ns.waitForVolumeToBeReady(reqParam.volumeID)
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
@@ -229,19 +247,19 @@ func (ns *node) NodeStageVolume(
 
 	devicePath, err := ns.attachDisk(instance)
 	if err != nil {
-		logrus.Errorf("NodeStageVolume: failed to attachDisk for volume %v, err: %v", req.GetVolumeId(), err)
+		logrus.Errorf("NodeStageVolume: failed to attachDisk for volume %v, err: %v", reqParam.volumeID, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	instance.Spec.MountInfo.FSType = fsType
+	instance.Spec.MountInfo.FSType = reqParam.fsType
 	instance.Spec.MountInfo.DevicePath = devicePath
-	instance.Spec.MountInfo.Path = stagingPath
+	instance.Spec.MountInfo.Path = reqParam.stagingPath
 	if err := ns.client.UpdateJivaVolume(instance); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	if err := os.MkdirAll(stagingPath, 0750); err != nil {
-		logrus.Errorf("failed to mkdir %s, error: %v", stagingPath, err)
+	if err := os.MkdirAll(reqParam.stagingPath, 0750); err != nil {
+		logrus.Errorf("failed to mkdir %s, error: %v", reqParam.stagingPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -422,7 +440,7 @@ func (ns *node) nodePublishVolumeForFileSystem(req *csi.NodePublishVolumeRequest
 	}
 
 	logrus.Infof("NodePublishVolume: creating dir %s", target)
-	if err := ns.mounter.MakeDir(target); err != nil {
+	if err := os.MkdirAll(target, 0000); err != nil {
 		return status.Errorf(codes.Internal, "Could not create dir %q: %v", target, err)
 	}
 

@@ -105,7 +105,7 @@ image: build
 
 push-image: image
 	@echo "--> Push image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
-	docker push $(REGISTRY)/$(PLUGIN_TAG_NAME):$(PLUGIN_TAG)
+	docker push $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG)
 
 push:
 	@echo "--> Push image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."

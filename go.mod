@@ -3,16 +3,14 @@ module github.com/openebs/jiva-csi
 go 1.12
 
 require (
-	github.com/axw/gocov v1.0.0 // indirect
 	github.com/container-storage-interface/spec v1.1.0
+	github.com/docker/go-units v0.3.3
 	github.com/kubernetes-csi/csi-lib-iscsi v0.0.0-20190415173011-c545557492f4
 	github.com/kubernetes-csi/csi-lib-utils v0.6.1
 	github.com/openebs/jiva-operator v0.0.0-00010101000000-000000000000
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
-	github.com/ugorji/go/codec/codecgen v1.1.7 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/tools v0.0.0-20191107235519-f7ea15e60b12 // indirect
 	google.golang.org/grpc v1.21.0
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
@@ -24,7 +22,7 @@ require (
 
 replace (
 	github.com/kubernetes-csi/csi-lib-iscsi => github.com/utkarshmani1997/csi-lib-iscsi v0.0.0-20191102050824-b5a02fd3deca
-	github.com/openebs/jiva-operator => github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191107051125-52e850f813b5
+	github.com/openebs/jiva-operator => github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191111120902-718f6b5ffa73
 	k8s.io/api => k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190620085554-14e95df34f1f
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
