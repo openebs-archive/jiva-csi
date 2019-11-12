@@ -47,6 +47,9 @@ const (
 	defaultFsType = FSTypeExt4
 
 	MaxRetryCount = 10
+
+	defaultISCSILUN       = int32(0)
+	defaultISCSIInterface = "default"
 )
 
 var (
@@ -90,9 +93,9 @@ func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 	connector := iscsi.Connector{
 		VolumeName:    instance.Name,
 		TargetIqn:     instance.Spec.ISCSISpec.Iqn,
-		Lun:           instance.Spec.ISCSISpec.Lun,
-		Interface:     instance.Spec.ISCSISpec.ISCSIInterface,
-		TargetPortals: instance.Spec.ISCSISpec.TargetPortals,
+		Lun:           defaultISCSILUN,
+		Interface:     defaultISCSIInterface,
+		TargetPortals: []string{fmt.Sprintf("%v:%v", instance.Spec.ISCSISpec.TargetIP, instance.Spec.ISCSISpec.TargetPort)},
 		Discovery:     true,
 	}
 
@@ -117,7 +120,7 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 		}
 
 		retry++
-		if instance.Status.Phase == jv.JivaVolumePhaseCreated && instance.Status.Status == "RW" {
+		if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
 			return instance, nil
 		} else if retry > MaxRetryCount {
 			if instance.Status.Status == "RO" {
@@ -236,7 +239,8 @@ func (ns *node) NodeStageVolume(
 	// reachable
 	logrus.Debug("NodeStageVolume: wait for the iscsi target to be ready")
 	if err := ns.waitForVolumeToBeReachable(
-		instance.Spec.ISCSISpec.TargetPortals[0],
+		fmt.Sprintf("%v:%v", instance.Spec.ISCSISpec.TargetIP,
+			instance.Spec.ISCSISpec.TargetPort),
 	); err != nil {
 		return nil,
 			status.Error(codes.FailedPrecondition, err.Error())
@@ -334,7 +338,8 @@ func (ns *node) NodeUnstageVolume(
 	}
 
 	logrus.Infof("NodeUnstageVolume: disconnect from iscsi target: %s", target)
-	if err := iscsi.Disconnect(instance.Spec.ISCSISpec.Iqn, instance.Spec.ISCSISpec.TargetPortals); err != nil {
+	if err := iscsi.Disconnect(instance.Spec.ISCSISpec.Iqn, []string{fmt.Sprintf("%v:%v",
+		instance.Spec.ISCSISpec.TargetIP, instance.Spec.ISCSISpec.TargetPort)}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -444,7 +449,13 @@ func (ns *node) nodePublishVolumeForFileSystem(req *csi.NodePublishVolumeRequest
 
 	logrus.Infof("NodePublishVolume: creating dir %s", target)
 	if err := os.MkdirAll(target, 0000); err != nil {
-		return status.Errorf(codes.Internal, "Could not create dir %q: %v", target, err)
+		return status.Errorf(codes.Internal, "Could not create dir {%q}, err: %v", target, err)
+	}
+
+	// in case if the dir already exists, above call returns nil
+	// so permission needs to be updated
+	if err := os.Chmod(target, 0000); err != nil {
+		return status.Errorf(codes.Internal, "Could not change mode of dir {%q}, err: %v", target, err)
 	}
 
 	fsType := mode.Mount.GetFsType()

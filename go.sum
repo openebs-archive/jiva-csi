@@ -509,6 +509,12 @@ github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191111103700-5a825a11d0f0 h1
 github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191111103700-5a825a11d0f0/go.mod h1:nusHYeOyBBWpHIF5VUOLre1w7zLF9pX0HGrxuVWIB34=
 github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191111120902-718f6b5ffa73 h1:d0kTe9ioTjU5Cd+P5+zTkOa74UUs2ihDnoRpo4v5ncg=
 github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191111120902-718f6b5ffa73/go.mod h1:nusHYeOyBBWpHIF5VUOLre1w7zLF9pX0HGrxuVWIB34=
+github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191112122522-d752f988fad8 h1:gjX9/m+rSSXyjbs6e7EY8GBaOGMHqyQZV0UuilNu+30=
+github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191112122522-d752f988fad8/go.mod h1:nusHYeOyBBWpHIF5VUOLre1w7zLF9pX0HGrxuVWIB34=
+github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191113043006-b174ab426f0e h1:5LZBeFSxIAqTXJm2yJyujiBHrduYMEv4n7iUDU6t63Q=
+github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191113043006-b174ab426f0e/go.mod h1:nusHYeOyBBWpHIF5VUOLre1w7zLF9pX0HGrxuVWIB34=
+github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191113075100-b3c39f1ba171 h1:EuiqUr+70uwJWp+4pIKN0No0znmV6GgnxnoNgWzJxc4=
+github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191113075100-b3c39f1ba171/go.mod h1:nusHYeOyBBWpHIF5VUOLre1w7zLF9pX0HGrxuVWIB34=
 github.com/vishvananda/netlink v0.0.0-20171020171820-b2de5d10e38e/go.mod h1:+SR5DhBJrl6ZM7CoCKvpw5BKroDKQ+PJqOg65H/2ktk=
 github.com/vishvananda/netns v0.0.0-20171111001504-be1fbeda1936/go.mod h1:ZjcWmFBXmLKZu9Nxj3WKYEafiSqer2rnvPr0en9UNpI=
 github.com/vmware/govmomi v0.20.1/go.mod h1:URlwyTFZX72RmxtxuaFL2Uj3fD1JTvZdx59bHWk6aFU=
