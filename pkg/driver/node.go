@@ -31,6 +31,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 const (
@@ -110,11 +111,7 @@ func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 	var retry int32
 	for {
-		if err := ns.client.Set(); err != nil {
-			return nil, err
-		}
-
-		instance, err := ns.client.GetJivaVolume(volID)
+		instance, err := ns.doesVolumeExist(volID)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +217,7 @@ func (ns *node) NodeStageVolume(
 	logrus.Infof("NodeStageVolume: start volume: {%q} operation", reqParam.volumeID)
 	if ok := ns.volumeTransition.Insert(reqParam.volumeID); !ok {
 		msg := fmt.Sprintf("request to stage volume=%q is already in progress", reqParam.volumeID)
-		return nil, status.Error(codes.Internal, msg)
+		return nil, status.Error(codes.Aborted, msg)
 	}
 	defer func() {
 		logrus.Infof("NodeStageVolume: volume: {%q} operation finished", reqParam.volumeID)
@@ -271,6 +268,20 @@ func (ns *node) NodeStageVolume(
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
+func (ns *node) doesVolumeExist(volID string) (*jv.JivaVolume, error) {
+	if err := ns.client.Set(); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	instance, err := ns.client.GetJivaVolume(volID)
+	if err != nil && errors.IsNotFound(err) {
+		return nil, status.Error(codes.NotFound, err.Error())
+	} else if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return instance, nil
+}
+
 // NodeUnstageVolume unmounts the volume from
 // the staging path
 //
@@ -283,10 +294,6 @@ func (ns *node) NodeUnstageVolume(
 	volID := req.GetVolumeId()
 	if volID == "" {
 		return nil, status.Error(codes.InvalidArgument, "NodeUnstageVolume Volume ID must be provided")
-	}
-
-	if err := ns.client.Set(); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	target := req.GetStagingTargetPath()
@@ -321,9 +328,9 @@ func (ns *node) NodeUnstageVolume(
 		return nil, status.Errorf(codes.Internal, "Could not unmount target %q: %v", target, err)
 	}
 
-	instance, err := ns.client.GetJivaVolume(volID)
+	instance, err := ns.doesVolumeExist(volID)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, err
 	}
 
 	logrus.Infof("NodeUnstageVolume: disconnect from iscsi target: %s", target)
@@ -399,10 +406,6 @@ func (ns *node) NodePublishVolume(
 
 	if !isValidVolumeCapabilities([]*csi.VolumeCapability{volCap}) {
 		return nil, status.Error(codes.InvalidArgument, "Volume capability not supported")
-	}
-
-	if err := ns.client.Set(); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	mountOptions := []string{"bind"}
