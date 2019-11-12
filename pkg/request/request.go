@@ -24,25 +24,23 @@ func NewTransition() *Transition {
 }
 
 // Insert insert the volume create req hash into map
-func (t *Transition) Insert(req Interface) bool {
+func (t *Transition) Insert(volID string) bool {
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
-	hash := req.String()
-
-	_, ok := t.volume[hash]
+	_, ok := t.volume[volID]
 	if ok {
 		return false
 	}
 
-	t.volume[hash] = true
+	t.volume[volID] = true
 	return true
 }
 
 // Delete removes the req from the map
-func (t *Transition) Delete(req Interface) {
+func (t *Transition) Delete(volID string) {
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
-	delete(t.volume, req.String())
+	delete(t.volume, volID)
 }

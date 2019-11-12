@@ -218,13 +218,13 @@ func (ns *node) NodeStageVolume(
 		return nil, err
 	}
 	logrus.Infof("NodeStageVolume: start volume: {%q} operation", reqParam.volumeID)
-	if ok := ns.volumeTransition.Insert(req); !ok {
+	if ok := ns.volumeTransition.Insert(reqParam.volumeID); !ok {
 		msg := fmt.Sprintf("request to stage volume=%q is already in progress", reqParam.volumeID)
 		return nil, status.Error(codes.Internal, msg)
 	}
 	defer func() {
 		logrus.Infof("NodeStageVolume: volume: {%q} operation finished", reqParam.volumeID)
-		ns.volumeTransition.Delete(req)
+		ns.volumeTransition.Delete(reqParam.volumeID)
 	}()
 
 	// Check if volume is ready to serve IOs,
