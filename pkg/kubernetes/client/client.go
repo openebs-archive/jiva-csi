@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/docker/go-units"
 	"github.com/openebs/jiva-csi/pkg/jivavolume"
 	"github.com/openebs/jiva-operator/pkg/apis"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
@@ -31,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/cloud-provider/volume/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -125,7 +125,9 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 		ns = defaultNS
 	}
 
-	capacity := units.BytesSize(float64(req.GetCapacityRange().RequiredBytes))
+	size := resource.NewQuantity(req.GetCapacityRange().RequiredBytes, resource.BinarySI)
+	volSizeGiB := helpers.RoundUpToGiB(*size)
+	capacity := fmt.Sprintf("%dGi", volSizeGiB)
 	jiva := jivavolume.New().WithKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
 		WithNameAndNamespace(name, ns).
 		WithLabels(getDefaultLabels(name)).
