@@ -96,7 +96,7 @@ func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 		Lun:           defaultISCSILUN,
 		Interface:     defaultISCSIInterface,
 		TargetPortals: []string{fmt.Sprintf("%v:%v", instance.Spec.ISCSISpec.TargetIP, instance.Spec.ISCSISpec.TargetPort)},
-		Discovery:     true,
+		DoDiscovery:   true,
 	}
 
 	logrus.Debugf("NodeStageVolume: attach disk with config: {%+v}", connector)
@@ -491,6 +491,17 @@ func (ns *node) NodeUnpublishVolume(
 	target := req.GetTargetPath()
 	if len(target) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
+	}
+
+	notMnt, err := ns.mounter.IsLikelyNotMountPoint(target)
+	if err != nil && !os.IsNotExist(err) {
+		logrus.Warningf("NodeUnpublishVolume: %s is not mounted, err: %v", target, err)
+		return &csi.NodeUnpublishVolumeResponse{}, nil
+	}
+
+	if notMnt {
+		logrus.Infof("Volume %s has been unmounted already", req.GetVolumeId())
+		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
 	logrus.Infof("NodeUnpublishVolume: unmounting %s", target)

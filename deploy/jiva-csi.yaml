@@ -255,7 +255,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["services"]
-    verbs: ["get", "list"]
+    verbs: ["*"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -322,7 +322,7 @@ spec:
               add: ["CAP_MKNOD", "CAP_SYS_ADMIN", "SYS_ADMIN"]
             allowPrivilegeEscalation: true
           image: openebs/jiva-csi:ci
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args:
             - "--name=jiva.csi.openebs.io"
             - "--nodeid=$(OPENEBS_NODEID)"

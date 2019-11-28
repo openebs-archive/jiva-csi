@@ -45,8 +45,8 @@ LDFLAGS ?= \
 	-X github.com/openebs/jiva-csi/version/version.DateTime=${DATETIME}
 
 
-.PHONY: all
-all:
+.PHONY: help
+help:
 	@echo "Available commands:"
 	@echo "  build                           - build csi source code"
 	@echo "  image                           - build csi container image"
@@ -121,12 +121,13 @@ push-tag: tag push
 
 clean:
 	rm -rf ./build/bin/
+	go mod tidy
 
 format:
 	@echo "--> Running go fmt"
 	@go fmt $(PACKAGES)
 
-test: format vet
+test: format vet clean
 	@echo "--> Running go test" ;
 	@go test -v --cover $(PACKAGES)
 

@@ -88,7 +88,7 @@ func main() {
 	)
 
 	cmd.PersistentFlags().StringVar(
-		&config.DriverName, "name", "", "Name of this driver",
+		&config.DriverName, "name", "jiva.csi.openebs.io", "Name of this driver",
 	)
 
 	cmd.PersistentFlags().StringVar(
