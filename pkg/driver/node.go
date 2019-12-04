@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -46,7 +47,8 @@ const (
 
 	defaultFsType = FSTypeExt4
 
-	MaxRetryCount = 10
+	MaxRetryCount = 5
+	SleepInterval = 10
 
 	defaultISCSILUN       = int32(0)
 	defaultISCSIInterface = "default"
@@ -114,6 +116,7 @@ func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 	var retry int32
 	for {
+		time.Sleep(SleepInterval * time.Second)
 		instance, err := ns.doesVolumeExist(volID)
 		if err != nil {
 			return nil, err
@@ -122,18 +125,23 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 		retry++
 		if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
 			return instance, nil
-		} else if retry > MaxRetryCount {
+		} else if retry < MaxRetryCount {
 			if instance.Status.Status == "RO" {
 				status := instance.Status.ReplicaStatuses
 				if len(status) != 0 {
-					return nil, fmt.Errorf("Volume is RO: replica status: {%+v}", status)
+					logrus.Warningf("Volume is RO: replica status: {%+v}", status)
+					continue
 				}
-				return nil, fmt.Errorf("Volume is not ready: replicas may not be connected")
+				logrus.Warningf("Volume is not ready: replicas may not be connected")
+				continue
 			}
-			return nil, fmt.Errorf("Volume is not ready: volume status is %s", instance.Status.Status)
+			logrus.Warningf("Volume is not ready: volume status is %s", instance.Status.Status)
+			continue
+		} else {
+			break
 		}
-		time.Sleep(2 * time.Second)
 	}
+	return nil, fmt.Errorf("Max retry count exceeded, volume is not ready")
 }
 
 func (ns *node) waitForVolumeToBeReachable(targetPortal string) error {
@@ -173,6 +181,7 @@ func (ns *node) validateStagingReq(req *csi.NodeStageVolumeRequest) (nodeStageRe
 		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
 
+	volID := strings.ToLower(volumeID)
 	volCap := req.GetVolumeCapability()
 	if volCap == nil {
 		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume capability not provided")
@@ -197,8 +206,9 @@ func (ns *node) validateStagingReq(req *csi.NodeStageVolumeRequest) (nodeStageRe
 		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "staging path is empty")
 	}
 
+	fmt.Println(volID)
 	return nodeStageRequest{
-		volumeID:    volumeID,
+		volumeID:    volID,
 		fsType:      fsType,
 		stagingPath: stagingPath,
 	}, nil
@@ -273,6 +283,7 @@ func (ns *node) NodeStageVolume(
 }
 
 func (ns *node) doesVolumeExist(volID string) (*jv.JivaVolume, error) {
+	volID = strings.ToLower(volID)
 	if err := ns.client.Set(); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -396,17 +407,17 @@ func (ns *node) NodePublishVolume(
 
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
-		return nil, status.Error(codes.FailedPrecondition, "Volume ID not provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
 
 	target := req.GetTargetPath()
 	if len(target) == 0 {
-		return nil, status.Error(codes.FailedPrecondition, "Target path not provided")
+		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
 	}
 
 	volCap := req.GetVolumeCapability()
 	if volCap == nil {
-		return nil, status.Error(codes.FailedPrecondition, "Volume capability not provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume capability not provided")
 	}
 
 	if !isValidVolumeCapabilities([]*csi.VolumeCapability{volCap}) {
