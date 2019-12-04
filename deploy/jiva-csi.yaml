@@ -260,7 +260,7 @@ spec:
               add: ["CAP_MKNOD", "CAP_SYS_ADMIN", "SYS_ADMIN"]
             allowPrivilegeEscalation: true
           image: openebs/jiva-csi:ci
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           args:
             - "--name=jiva.csi.openebs.io"
             - "--nodeid=$(OPENEBS_NODEID)"
