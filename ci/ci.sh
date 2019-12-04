@@ -35,7 +35,6 @@ waitForComponent "deploy" "openebs-localpv-provisioner" "openebs"
 waitForComponent "sts" "openebs-jiva-csi-controller" "kube-system"
 waitForComponent "ds" "openebs-jiva-csi-node" "kube-system"
 
-unlink /tmp/csi.sock
 SOCK_PATH=/var/lib/kubelet/pods/`kubectl get pod -n kube-system openebs-jiva-csi-controller-0 -o 'jsonpath={.metadata.uid}'`/volumes/kubernetes.io~empty-dir/socket-dir/csi.sock
 chmod -R 777 /var/lib/kubelet
 ln -s $SOCK_PATH /tmp/csi.sock
