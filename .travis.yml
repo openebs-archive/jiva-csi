@@ -48,7 +48,7 @@ script:
   - kubectl apply -f deploy/crds/openebs_v1alpha1_jivavolume_crd.yaml
   - kubectl apply -f deploy/
   - cd ${TRAVIS_BUILD_DIR}
-  - kubectl apply -f deploy/
+  - kubectl apply -f deploy/jiva-csi-ubuntu-16.04.yaml
   - ./ci/ci.sh
 after_success:
   - make push-tag
