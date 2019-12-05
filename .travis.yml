@@ -26,6 +26,8 @@ install:
 
 before_install:
   - git clone https://www.github.com/openebs/jiva-operator $GOPATH/src/github.com/openebs/jiva-operator
+  - sudo apt-get install -y open-iscsi
+  - sudo service iscsid start
   # Download kubectl, which is a requirement for using minikube.
   - curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/v1.14.8/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
   # Download minikube.
