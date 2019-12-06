@@ -47,15 +47,13 @@ const (
 
 	defaultFsType = FSTypeExt4
 
-	MaxRetryCount = 5
-	SleepInterval = 10
-
 	defaultISCSILUN       = int32(0)
 	defaultISCSIInterface = "default"
 )
 
 var (
-	ValidFSTypes = []string{FSTypeExt2, FSTypeExt3, FSTypeExt4, FSTypeXfs}
+	ValidFSTypes  = []string{FSTypeExt2, FSTypeExt3, FSTypeExt4, FSTypeXfs}
+	MaxRetryCount int
 )
 
 var (
@@ -114,9 +112,10 @@ func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 }
 
 func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
-	var retry int32
+	var retry int
+	var sleepInterval time.Duration = 0
 	for {
-		time.Sleep(SleepInterval * time.Second)
+		time.Sleep(sleepInterval * time.Second)
 		instance, err := ns.doesVolumeExist(volID)
 		if err != nil {
 			return nil, err
@@ -126,6 +125,7 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 		if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
 			return instance, nil
 		} else if retry < MaxRetryCount {
+			sleepInterval = 30
 			if instance.Status.Status == "RO" {
 				status := instance.Status.ReplicaStatuses
 				if len(status) != 0 {
@@ -260,6 +260,12 @@ func (ns *node) NodeStageVolume(
 	if err != nil {
 		logrus.Errorf("NodeStageVolume: failed to attachDisk for volume %v, err: %v", reqParam.volumeID, err)
 		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	// JivaVolume CR may be updated by jiva-operator
+	instance, err = ns.client.GetJivaVolume(reqParam.volumeID)
+	if err != nil {
+		return nil, err
 	}
 
 	instance.Spec.MountInfo.FSType = reqParam.fsType

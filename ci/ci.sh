@@ -1,6 +1,23 @@
 #!/bin/bash
 
-set -ex
+#set -ex
+
+function dumpLogs() {
+	RESOURCE=$1
+	COMPONENT=$2
+	NS=$3
+	LABEL=$4
+	CONTAINER=$5
+	kubectl describe $RESOURCE $COMPONENT -n $NS
+	POD=$(kubectl get pod -n $NS -l $LABEL -o jsonpath='{range .items[*]}{@.metadata.name}')
+	if [ -n $CONTAINER ];
+	then
+		kubectl logs --tail=20 $POD -n $NS -c $CONTAINER
+	else
+		kubectl logs --tail=20 $POD -n $NS
+	fi
+}
+
 function waitForComponent() {
   RESOURCE=$1
   COMPONENT=$2
@@ -71,6 +88,16 @@ fi
 cd "$CSI_REPO_PATH/cmd/csi-sanity"
 make clean
 make
+ls -lrt
 
-csi-sanity --ginkgo.v --csi.controllerendpoint=///tmp/csi.sock --csi.endpoint=/var/lib/kubelet/plugins/jiva.csi.openebs.io/csi.sock --csi.testvolumeparameters=/tmp/parameters.json
+./csi-sanity --ginkgo.v --csi.controllerendpoint=///tmp/csi.sock --csi.endpoint=/var/lib/kubelet/plugins/jiva.csi.openebs.io/csi.sock --csi.testvolumeparameters=/tmp/parameters.json
+if [ $? -ne 0 ];
+then
+	kubectl get pods -n openebs
+	kubectl describe pods -n openebs
+	dumpLogs "ds" "openebs-jiva-csi-node" "kube-system" "app=openebs-jiva-csi-node" "openebs-jiva-csi-plugin"
+	dumpLogs "sts" "openebs-jiva-csi-controller" "kube-system" "app=openebs-jiva-csi-controller" "openebs-jiva-csi-plugin"
+	dumpLogs "deploy" "openebs-localpv-provisioner" "openebs" "name=openebs-localpv-provisioner"
+	exit 1
+fi
 exit 0

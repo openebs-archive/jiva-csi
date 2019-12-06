@@ -55,4 +55,3 @@ after_success:
 notifications:
   email:
     recipients:
-      - kiran.mova@mayadata.io

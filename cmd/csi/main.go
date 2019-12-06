@@ -49,7 +49,9 @@ func (w *log2LogrusWriter) Write(b []byte) (int, error) {
 	return n, nil
 }
 
-var enableISCSIDebug bool
+var (
+	enableISCSIDebug bool
+)
 
 /*
  * main routine to start the jiva-csi-driver. The same
@@ -97,6 +99,10 @@ func main() {
 
 	cmd.Flags().BoolVar(
 		&enableISCSIDebug, "enableiscsidebug", false, "Enable iscsi debug logs",
+	)
+
+	cmd.Flags().IntVar(
+		&driver.MaxRetryCount, "retrycount", 3, "Max retry count to check if volume is ready",
 	)
 
 	err := cmd.Execute()

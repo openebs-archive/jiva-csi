@@ -270,6 +270,7 @@ spec:
             - "--enableiscsidebug=true"
             # logging level for klog library used in k8s packages
             #- "--v=5"
+            - "--retrycount=5"
           env:
             - name: OPENEBS_NODE_ID
               valueFrom:
