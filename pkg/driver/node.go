@@ -124,7 +124,7 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 		retry++
 		if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
 			return instance, nil
-		} else if retry < MaxRetryCount {
+		} else if retry <= MaxRetryCount {
 			sleepInterval = 30
 			if instance.Status.Status == "RO" {
 				status := instance.Status.ReplicaStatuses
