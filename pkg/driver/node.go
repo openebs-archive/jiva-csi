@@ -247,6 +247,14 @@ func (ns *node) NodeStageVolume(
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 
+	// Volume may be mounted at targetPath (bind mount in NodePublish)
+	targetPath := instance.Spec.MountInfo.TargetPath
+	if len(targetPath) != 0 {
+		if err := ns.unmount(reqParam.volumeID, targetPath); err != nil {
+			return nil, err
+		}
+	}
+
 	// A temporary TCP connection is made to the volume to check if its
 	// reachable
 	logrus.Debug("NodeStageVolume: wait for the iscsi target to be ready")
@@ -273,6 +281,7 @@ func (ns *node) NodeStageVolume(
 	instance.Spec.MountInfo.FSType = reqParam.fsType
 	instance.Spec.MountInfo.DevicePath = devicePath
 	instance.Spec.MountInfo.Path = reqParam.stagingPath
+	instance.Spec.MountInfo.TargetPath = ""
 	if err := ns.client.UpdateJivaVolume(instance); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -432,6 +441,19 @@ func (ns *node) NodePublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Volume capability not supported")
 	}
 
+	instance, err := ns.doesVolumeExist(volumeID)
+	if err != nil {
+		return nil, err
+	}
+	// Volume may be mounted at targetPath (bind mount in NodePublish)
+	targetPath := instance.Spec.MountInfo.TargetPath
+	logrus.Debugf("NodePublishVolume: volume mounted at %s", targetPath)
+	if len(targetPath) != 0 {
+		if err := ns.unmount(volumeID, targetPath); err != nil {
+			return nil, err
+		}
+	}
+
 	mountOptions := []string{"bind"}
 	if req.GetReadonly() {
 		mountOptions = append(mountOptions, "ro")
@@ -444,6 +466,12 @@ func (ns *node) NodePublishVolume(
 			return nil, err
 		}
 	}
+
+	instance.Spec.MountInfo.TargetPath = target
+	if err := ns.client.UpdateJivaVolume(instance); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -512,17 +540,30 @@ func (ns *node) NodeUnpublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
 	}
 
-	notMnt, err := ns.mounter.IsLikelyNotMountPoint(target)
-	if (err == nil && notMnt) || os.IsNotExist(err) {
-		logrus.Warningf("NodeUnpublishVolume: %s is not mounted, err: %v", target, err)
-		return &csi.NodeUnpublishVolumeResponse{}, nil
+	if err := ns.unmount(volumeID, target); err != nil {
+		return nil, err
 	}
 
-	logrus.Infof("NodeUnpublishVolume: unmounting %s", target)
-	if err := ns.mounter.Unmount(target); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not unmount %q: %v", target, err)
-	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
+}
+
+func (ns *node) unmount(volumeID, target string) error {
+	notMnt, err := ns.mounter.IsLikelyNotMountPoint(target)
+	if err != nil && !os.IsNotExist(err) {
+		logrus.Warningf("Volume: %s is not mounted, err: %v", target, err)
+		return nil
+	}
+
+	if notMnt {
+		logrus.Infof("Volume: %s has been unmounted already", volumeID)
+		return nil
+	}
+
+	logrus.Infof("Unmounting: %s", target)
+	if err := ns.mounter.Unmount(target); err != nil {
+		return status.Errorf(codes.Internal, "Could not unmount %q: %v", target, err)
+	}
+	return nil
 }
 
 // NodeGetInfo returns node details
