@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -248,11 +249,8 @@ func (ns *node) NodeStageVolume(
 	}
 
 	// Volume may be mounted at targetPath (bind mount in NodePublish)
-	targetPath := instance.Spec.MountInfo.TargetPath
-	if len(targetPath) != 0 {
-		if err := ns.unmount(reqParam.volumeID, targetPath); err != nil {
-			return nil, err
-		}
+	if err := ns.isAlreadyMounted(reqParam.volumeID); err != nil {
+		return nil, err
 	}
 
 	// A temporary TCP connection is made to the volume to check if its
@@ -281,7 +279,6 @@ func (ns *node) NodeStageVolume(
 	instance.Spec.MountInfo.FSType = reqParam.fsType
 	instance.Spec.MountInfo.DevicePath = devicePath
 	instance.Spec.MountInfo.Path = reqParam.stagingPath
-	instance.Spec.MountInfo.TargetPath = ""
 	if err := ns.client.UpdateJivaVolume(instance); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -441,17 +438,9 @@ func (ns *node) NodePublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Volume capability not supported")
 	}
 
-	instance, err := ns.doesVolumeExist(volumeID)
-	if err != nil {
-		return nil, err
-	}
 	// Volume may be mounted at targetPath (bind mount in NodePublish)
-	targetPath := instance.Spec.MountInfo.TargetPath
-	logrus.Debugf("NodePublishVolume: volume mounted at %s", targetPath)
-	if len(targetPath) != 0 {
-		if err := ns.unmount(volumeID, targetPath); err != nil {
-			return nil, err
-		}
+	if err := ns.isAlreadyMounted(volumeID); err != nil {
+		return nil, err
 	}
 
 	mountOptions := []string{"bind"}
@@ -465,11 +454,6 @@ func (ns *node) NodePublishVolume(
 		if err := ns.nodePublishVolumeForFileSystem(req, mountOptions, mode); err != nil {
 			return nil, err
 		}
-	}
-
-	instance.Spec.MountInfo.TargetPath = target
-	if err := ns.client.UpdateJivaVolume(instance); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
@@ -545,6 +529,26 @@ func (ns *node) NodeUnpublishVolume(
 	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
+}
+
+func (ns *node) isAlreadyMounted(volID string) error {
+	var currentMounts []string
+	mountList, err := ns.mounter.List()
+	if err != nil {
+		return fmt.Errorf("Failed to list mount paths")
+	}
+
+	for _, mntInfo := range mountList {
+		if strings.Contains(mntInfo.Path, volID) {
+			currentMounts = append(currentMounts, mntInfo.Path)
+		}
+	}
+
+	if len(currentMounts) > 1 {
+		return fmt.Errorf("Volume is already mounted at more than one place: {%v}", currentMounts)
+	}
+
+	return nil
 }
 
 func (ns *node) unmount(volumeID, target string) error {

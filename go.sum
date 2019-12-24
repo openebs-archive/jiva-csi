@@ -379,6 +379,8 @@ github.com/opencontainers/image-spec v0.0.0-20170604055404-372ad780f634/go.mod h
 github.com/opencontainers/runc v0.0.0-20181113202123-f000fe11ece1/go.mod h1:qT5XzbpPznkRYVz/mWwUaVBUv2rmF59PVA73FjuZG0U=
 github.com/opencontainers/runtime-spec v1.0.0/go.mod h1:jwyrGlmzljRJv/Fgzds9SsS/C5hL+LL3ko9hs6T5lQ0=
 github.com/opencontainers/selinux v0.0.0-20170621221121-4a2974bf1ee9/go.mod h1:+BLncwf63G4dgOzykXAxcmnFlUaOlkDdmw/CqsW6pjs=
+github.com/openebs/jiva-operator v0.0.0-20191128062733-08c184aa7f8a h1:/dMmoSb4r3VhsGMy5dG0/HTF7bMzDOyzE8NRemW73RY=
+github.com/openebs/jiva-operator v0.0.0-20191128062733-08c184aa7f8a/go.mod h1:xxGmb6r4sZaY02Z9/iUMNgOvwXnZIp8pvAW0nHyK9B4=
 github.com/openshift/api v3.9.1-0.20190424152011-77b8897ec79a+incompatible/go.mod h1:dh9o4Fs58gpFXGSYfnVxGR9PnV53I8TW84pQaJDdGiY=
 github.com/openshift/client-go v0.0.0-20190401163519-84c2b942258a/go.mod h1:6rzn+JTr7+WYS2E1TExP4gByoABxMznR6y2SnUIkmxk=
 github.com/openshift/origin v0.0.0-20160503220234-8f127d736703/go.mod h1:0Rox5r9C8aQn6j1oAOQ0c1uC86mYbUFObzjBRvUKHII=
@@ -503,8 +505,6 @@ github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGr
 github.com/ugorji/go/codec v0.0.0-20181022190402-e5e69e061d4f/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
 github.com/urfave/negroni v1.0.0/go.mod h1:Meg73S6kFm/4PpbYdq35yYWoCZ9mS/YSx+lKnmiohz4=
-github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191212101538-a3b1fc1c7a25 h1:63fpZ0LHw/ivnOPQCWNwUePNVrmKIbsuhAvfa77YF/M=
-github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20191212101538-a3b1fc1c7a25/go.mod h1:xxGmb6r4sZaY02Z9/iUMNgOvwXnZIp8pvAW0nHyK9B4=
 github.com/vishvananda/netlink v0.0.0-20171020171820-b2de5d10e38e/go.mod h1:+SR5DhBJrl6ZM7CoCKvpw5BKroDKQ+PJqOg65H/2ktk=
 github.com/vishvananda/netns v0.0.0-20171111001504-be1fbeda1936/go.mod h1:ZjcWmFBXmLKZu9Nxj3WKYEafiSqer2rnvPr0en9UNpI=
 github.com/vmware/govmomi v0.20.1/go.mod h1:URlwyTFZX72RmxtxuaFL2Uj3fD1JTvZdx59bHWk6aFU=
