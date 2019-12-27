@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/kubernetes-csi/csi-lib-iscsi/iscsi"
 	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
 	"github.com/openebs/jiva-csi/pkg/request"
+	"github.com/openebs/jiva-csi/pkg/utils"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -181,7 +181,7 @@ func (ns *node) validateStagingReq(req *csi.NodeStageVolumeRequest) (nodeStageRe
 		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
 
-	volID := strings.ToLower(volumeID)
+	volID := utils.StripName(volumeID)
 	volCap := req.GetVolumeCapability()
 	if volCap == nil {
 		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume capability not provided")
@@ -289,7 +289,7 @@ func (ns *node) NodeStageVolume(
 }
 
 func (ns *node) doesVolumeExist(volID string) (*jv.JivaVolume, error) {
-	volID = strings.ToLower(volID)
+	volID = utils.StripName(volID)
 	if err := ns.client.Set(); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}

@@ -12,6 +12,7 @@ function initializeTestEnv() {
         "replicaCount": "1"
 }
 EOT
+  sudo rm -rf /tmp/csi.sock
 }
 
 
@@ -73,7 +74,7 @@ function waitForComponent() {
 }
 
 function initializeCSISanitySuite() {
-	echo "=============== Initialize CSI Sanity test suite =============="
+	echo "=============== Initialize CSI Sanity test suite ==============="
 	CSI_TEST_REPO=https://github.com/kubernetes-csi/csi-test.git
 	CSI_REPO_PATH="$GOPATH/src/github.com/kubernetes-csi/csi-test"
 	if [ ! -d "$CSI_REPO_PATH" ] ; then
@@ -102,7 +103,7 @@ function waitForAllComponentsToBeReady() {
 }
 
 function startTestSuite() {
-	echo "================== Start csi-sanity test suite ==============="
+	echo "================== Start csi-sanity test suite ================="
 	./csi-sanity --ginkgo.v --csi.controllerendpoint=///tmp/csi.sock --csi.endpoint=/var/lib/kubelet/plugins/jiva.csi.openebs.io/csi.sock --csi.testvolumeparameters=/tmp/parameters.json
 	if [ $? -ne 0 ];
 	then

@@ -19,10 +19,10 @@ package client
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/openebs/jiva-csi/pkg/jivavolume"
+	"github.com/openebs/jiva-csi/pkg/utils"
 	"github.com/openebs/jiva-operator/pkg/apis"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
 	"github.com/sirupsen/logrus"
@@ -126,13 +126,7 @@ func getDefaultLabels(pv string) map[string]string {
 // if it doesn't exist.
 func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	var sizeBytes int64
-	name := req.GetName()
-	name = strings.ToLower(name)
-	// CR only support names upto 63 chars
-	// so this trims the rest of the trailing chars
-	if len(name) > maxNameLen {
-		name = name[:maxNameLen]
-	}
+	name := utils.StripName(req.GetName())
 	sc := req.GetParameters()["replicaSC"]
 	rf := req.GetParameters()["replicaCount"]
 	ns, ok := req.GetParameters()["namespace"]
@@ -196,7 +190,7 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 		})
 
 	if jiva.Errs != nil {
-		return fmt.Errorf("failed to build JivaVolume CR, err: %v", jiva.Errs)
+		return status.Errorf(codes.Internal, "failed to build JivaVolume CR, err: %v", jiva.Errs)
 	}
 
 	obj := jiva.Instance()
@@ -222,6 +216,7 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 
 // DeleteJivaVolume delete the JivaVolume CR
 func (cl *Client) DeleteJivaVolume(volumeID string) error {
+	volumeID = utils.StripName(volumeID)
 	obj := &jv.JivaVolumeList{}
 	opts := []client.ListOption{
 		client.MatchingLabels(getDefaultLabels(volumeID)),
