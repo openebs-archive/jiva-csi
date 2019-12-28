@@ -21,6 +21,7 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
+	"github.com/openebs/jiva-csi/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -124,8 +125,7 @@ func (cs *controller) ValidateVolumeCapabilities(
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
-	volumeID = strings.ToLower(volumeID)
-
+	volumeID = utils.StripName(volumeID)
 	volCaps := req.GetVolumeCapabilities()
 	if len(volCaps) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume capabilities not provided")
