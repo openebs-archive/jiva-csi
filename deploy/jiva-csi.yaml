@@ -274,7 +274,7 @@ spec:
             # request on a timeout of 5 sec
             # This count has been set to 30 for sanity test cases as it takes
             # time in minikube
-            - "--retrycount=30"
+            - "--retrycount=10"
           env:
             - name: OPENEBS_NODE_ID
               valueFrom:
