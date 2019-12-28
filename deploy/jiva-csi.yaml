@@ -270,7 +270,11 @@ spec:
             - "--enableiscsidebug=true"
             # logging level for klog library used in k8s packages
             #- "--v=5"
-            - "--retrycount=5"
+            # retrycount is the max number of retries per nodeStaging rpc
+            # request on a timeout of 5 sec
+            # This count has been set to 20 for sanity test cases as it takes
+            # time in minikube
+            - "--retrycount=20"
           env:
             - name: OPENEBS_NODE_ID
               valueFrom:

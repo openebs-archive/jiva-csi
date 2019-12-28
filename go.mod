@@ -10,12 +10,14 @@ require (
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
+	golang.org/x/text v0.3.2 // indirect
+	google.golang.org/genproto v0.0.0-20181202183823-bd91e49a0898 // indirect
 	google.golang.org/grpc v1.21.0
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/cloud-provider v0.0.0
-	k8s.io/klog v0.3.3
+	k8s.io/klog v0.4.0
 	k8s.io/kubernetes v1.15.4
 	sigs.k8s.io/controller-runtime v0.3.0
 )

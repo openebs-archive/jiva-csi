@@ -17,7 +17,10 @@ limitations under the License.
 package version
 
 var (
+	// Version holds the version info of jiva-csi
 	Version = "0.0.1"
-	Commit  = ""
-	Date    = ""
+	// Commit holds the last commit hash
+	Commit = ""
+	// Date holds the date of build
+	Date = ""
 )

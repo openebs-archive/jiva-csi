@@ -256,22 +256,6 @@ func (cs *controller) ListVolumes(
 	return nil, status.Error(codes.Unimplemented, "")
 }
 
-// validateCapabilities validates if provided capabilities
-// are supported by this driver
-func validateCapabilities(caps []*csi.VolumeCapability) bool {
-
-	for _, cap := range caps {
-		if !IsSupportedVolumeCapabilityAccessMode(cap.GetAccessMode().Mode) {
-			return false
-		}
-
-		if cap.GetMount() == nil {
-			return false
-		}
-	}
-	return true
-}
-
 // IsSupportedVolumeCapabilityAccessMode valides the requested access mode
 func IsSupportedVolumeCapabilityAccessMode(
 	accessMode csi.VolumeCapability_AccessMode_Mode,

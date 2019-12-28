@@ -102,7 +102,7 @@ func main() {
 	)
 
 	cmd.Flags().IntVar(
-		&driver.MaxRetryCount, "retrycount", 3, "Max retry count to check if volume is ready",
+		&driver.MaxRetryCount, "retrycount", 5, "Max retry count to check if volume is ready",
 	)
 
 	err := cmd.Execute()

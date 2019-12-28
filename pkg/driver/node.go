@@ -52,7 +52,10 @@ const (
 )
 
 var (
-	ValidFSTypes  = []string{FSTypeExt2, FSTypeExt3, FSTypeExt4, FSTypeXfs}
+	// ValidFSTypes is the supported filesystem by the jiva-csi driver
+	ValidFSTypes = []string{FSTypeExt2, FSTypeExt3, FSTypeExt4, FSTypeXfs}
+	// MaxRetryCount is the retry count to check if volume is ready during
+	// nodeStage RPC call
 	MaxRetryCount int
 )
 
@@ -125,11 +128,11 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 		if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
 			return instance, nil
 		} else if retry <= MaxRetryCount {
-			sleepInterval = 30
+			sleepInterval = 5
 			if instance.Status.Status == "RO" {
 				status := instance.Status.ReplicaStatuses
 				if len(status) != 0 {
-					logrus.Warningf("Volume is RO: replica status: {%+v}", status)
+					logrus.Warningf("Volume is in RO mode: replica status: {%+v}", status)
 					continue
 				}
 				logrus.Warningf("Volume is not ready: replicas may not be connected")

@@ -23,6 +23,7 @@ import (
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
 )
 
+// Jiva wraps the JivaVolume structure
 type Jiva struct {
 	jvObj *jv.JivaVolume
 	Errs  []error
@@ -75,6 +76,7 @@ func (j *Jiva) WithNameAndNamespace(name, ns string) *Jiva {
 	return j
 }
 
+// WithLabels is used to set the labels in JivaVolume CR
 func (j *Jiva) WithLabels(labels map[string]string) *Jiva {
 	if labels != nil {
 		j.jvObj.Labels = labels
@@ -92,11 +94,11 @@ type ResourceParameters func(param string) string
 // have been provided or not in req, if not, it returns default value (0)
 func HasResourceParameters(req *csi.CreateVolumeRequest) ResourceParameters {
 	return func(param string) string {
-		if val, ok := req.GetParameters()[param]; !ok {
+		val, ok := req.GetParameters()[param]
+		if !ok {
 			return "0"
-		} else {
-			return val
 		}
+		return val
 	}
 }
 
