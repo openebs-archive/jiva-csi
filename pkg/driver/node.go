@@ -130,9 +130,9 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 		} else if retry <= MaxRetryCount {
 			sleepInterval = 5
 			if instance.Status.Status == "RO" {
-				status := instance.Status.ReplicaStatuses
-				if len(status) != 0 {
-					logrus.Warningf("Volume is in RO mode: replica status: {%+v}", status)
+				replicaStatus := instance.Status.ReplicaStatuses
+				if len(replicaStatus) != 0 {
+					logrus.Warningf("Volume is in RO mode: replica status: {%+v}", replicaStatus)
 					continue
 				}
 				logrus.Warningf("Volume is not ready: replicas may not be connected")
@@ -209,7 +209,6 @@ func (ns *node) validateStagingReq(req *csi.NodeStageVolumeRequest) (nodeStageRe
 		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "staging path is empty")
 	}
 
-	fmt.Println(volID)
 	return nodeStageRequest{
 		volumeID:    volID,
 		fsType:      fsType,

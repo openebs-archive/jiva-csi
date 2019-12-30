@@ -278,7 +278,7 @@ spec:
             #- "--v=5"
             # retrycount is the max number of retries per nodeStaging rpc
             # request on a timeout of 5 sec
-            # This count has been set to 30 for sanity test cases as it takes
+            # This count has been set to 10 for sanity test cases as it takes
             # time in minikube
             - "--retrycount=10"
           env:
