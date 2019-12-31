@@ -17,8 +17,11 @@ limitations under the License.
 package driver
 
 import (
+	"strings"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
+	"github.com/openebs/jiva-csi/pkg/utils"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -40,6 +43,12 @@ var SupportedVolumeCapabilityAccessModes = []*csi.VolumeCapability_AccessMode{
 	},
 }
 
+var SupportedVolumeCapabilityAccessType = []*csi.VolumeCapability_Mount{
+	&csi.VolumeCapability_Mount{
+		Mount: &csi.VolumeCapability_MountVolume{},
+	},
+}
+
 // NewController returns a new instance
 // of CSI controller
 func NewController(cli *client.Client) csi.ControllerServer {
@@ -55,18 +64,17 @@ func (cs *controller) CreateVolume(
 	req *csi.CreateVolumeRequest,
 ) (*csi.CreateVolumeResponse, error) {
 
+	if err := cs.validateVolumeCreateReq(req); err != nil {
+		return nil, err
+	}
+
 	// set client each time to avoid caching issue
 	if err := cs.client.Set(); err != nil {
 		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
 	}
 
-	if err := cs.validateVolumeCreateReq(req); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-
-	}
-
 	if err := cs.client.CreateJivaVolume(req); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, err
 	}
 
 	logrus.Infof("CreateVolume: volume: {%v} is created", req.GetName())
@@ -82,18 +90,24 @@ func (cs *controller) CreateVolume(
 func (cs *controller) DeleteVolume(
 	ctx context.Context,
 	req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+	volID := req.GetVolumeId()
+	if volID == "" {
+		return nil, status.Error(
+			codes.InvalidArgument,
+			"failed to validate volume create request: missing volume name",
+		)
+	}
+	volID = strings.ToLower(volID)
 	// set client each time to avoid caching issue
 	if err := cs.client.Set(); err != nil {
 		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
-
 	}
 
-	if err := cs.client.DeleteJivaVolume(req); err != nil {
+	if err := cs.client.DeleteJivaVolume(volID); err != nil {
 		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to delete volume {%v}, err: %v", req.VolumeId, err)
 	}
 
 	logrus.Infof("DeleteVolume: volume {%s} is deleted", req.VolumeId)
-
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
@@ -107,7 +121,32 @@ func (cs *controller) ValidateVolumeCapabilities(
 	req *csi.ValidateVolumeCapabilitiesRequest,
 ) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 
-	return nil, status.Error(codes.Unimplemented, "")
+	volumeID := req.GetVolumeId()
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	}
+	volumeID = utils.StripName(volumeID)
+	volCaps := req.GetVolumeCapabilities()
+	if len(volCaps) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume capabilities not provided")
+	}
+
+	// set client each time to avoid caching issue
+	if err := cs.client.Set(); err != nil {
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
+	}
+
+	if _, err := cs.client.GetJivaVolume(volumeID); err != nil {
+		return nil, err
+	}
+
+	var confirmed *csi.ValidateVolumeCapabilitiesResponse_Confirmed
+	if isValidVolumeCapabilities(volCaps) {
+		confirmed = &csi.ValidateVolumeCapabilitiesResponse_Confirmed{VolumeCapabilities: volCaps}
+	}
+	return &csi.ValidateVolumeCapabilitiesResponse{
+		Confirmed: confirmed,
+	}, nil
 }
 
 // ControllerGetCapabilities fetches controller capabilities
@@ -215,18 +254,6 @@ func (cs *controller) ListVolumes(
 ) (*csi.ListVolumesResponse, error) {
 
 	return nil, status.Error(codes.Unimplemented, "")
-}
-
-// validateCapabilities validates if provided capabilities
-// are supported by this driver
-func validateCapabilities(caps []*csi.VolumeCapability) bool {
-
-	for _, cap := range caps {
-		if !IsSupportedVolumeCapabilityAccessMode(cap.AccessMode.Mode) {
-			return false
-		}
-	}
-	return true
 }
 
 // IsSupportedVolumeCapabilityAccessMode valides the requested access mode

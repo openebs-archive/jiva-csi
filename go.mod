@@ -6,18 +6,18 @@ require (
 	github.com/container-storage-interface/spec v1.1.0
 	github.com/kubernetes-csi/csi-lib-iscsi v0.0.0-20191120152119-1430b53a1741
 	github.com/kubernetes-csi/csi-lib-utils v0.6.1
-	github.com/onsi/ginkgo v1.8.0
-	github.com/onsi/gomega v1.5.0
 	github.com/openebs/jiva-operator v0.0.0-20191128062733-08c184aa7f8a
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
+	golang.org/x/text v0.3.2 // indirect
+	google.golang.org/genproto v0.0.0-20181202183823-bd91e49a0898 // indirect
 	google.golang.org/grpc v1.21.0
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/cloud-provider v0.0.0
-	k8s.io/klog v0.3.3
+	k8s.io/klog v0.4.0
 	k8s.io/kubernetes v1.15.4
 	sigs.k8s.io/controller-runtime v0.3.0
 )

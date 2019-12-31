@@ -20,6 +20,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/mount"
 )
 
+// NodeMounter embeds the SafeFormatAndMount struct
 type NodeMounter struct {
 	mount.SafeFormatAndMount
 }
@@ -33,6 +34,7 @@ func newNodeMounter() *NodeMounter {
 	}
 }
 
+// GetDeviceName get the device name from the mount path
 func (m *NodeMounter) GetDeviceName(mountPath string) (string, int, error) {
 	return mount.GetDeviceNameFromMount(m, mountPath)
 }

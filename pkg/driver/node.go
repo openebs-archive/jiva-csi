@@ -26,6 +26,7 @@ import (
 	"github.com/kubernetes-csi/csi-lib-iscsi/iscsi"
 	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
 	"github.com/openebs/jiva-csi/pkg/request"
+	"github.com/openebs/jiva-csi/pkg/utils"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
@@ -46,14 +47,16 @@ const (
 
 	defaultFsType = FSTypeExt4
 
-	MaxRetryCount = 10
-
 	defaultISCSILUN       = int32(0)
 	defaultISCSIInterface = "default"
 )
 
 var (
+	// ValidFSTypes is the supported filesystem by the jiva-csi driver
 	ValidFSTypes = []string{FSTypeExt2, FSTypeExt3, FSTypeExt4, FSTypeXfs}
+	// MaxRetryCount is the retry count to check if volume is ready during
+	// nodeStage RPC call
+	MaxRetryCount int
 )
 
 var (
@@ -112,8 +115,10 @@ func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 }
 
 func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
-	var retry int32
+	var retry int
+	var sleepInterval time.Duration = 0
 	for {
+		time.Sleep(sleepInterval * time.Second)
 		instance, err := ns.doesVolumeExist(volID)
 		if err != nil {
 			return nil, err
@@ -122,18 +127,24 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 		retry++
 		if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
 			return instance, nil
-		} else if retry > MaxRetryCount {
+		} else if retry <= MaxRetryCount {
+			sleepInterval = 5
 			if instance.Status.Status == "RO" {
-				status := instance.Status.ReplicaStatuses
-				if len(status) != 0 {
-					return nil, fmt.Errorf("Volume is RO: replica status: {%+v}", status)
+				replicaStatus := instance.Status.ReplicaStatuses
+				if len(replicaStatus) != 0 {
+					logrus.Warningf("Volume is in RO mode: replica status: {%+v}", replicaStatus)
+					continue
 				}
-				return nil, fmt.Errorf("Volume is not ready: replicas may not be connected")
+				logrus.Warningf("Volume is not ready: replicas may not be connected")
+				continue
 			}
-			return nil, fmt.Errorf("Volume is not ready: volume status is %s", instance.Status.Status)
+			logrus.Warningf("Volume is not ready: volume status is %s", instance.Status.Status)
+			continue
+		} else {
+			break
 		}
-		time.Sleep(2 * time.Second)
 	}
+	return nil, fmt.Errorf("Max retry count exceeded, volume is not ready")
 }
 
 func (ns *node) waitForVolumeToBeReachable(targetPortal string) error {
@@ -173,6 +184,7 @@ func (ns *node) validateStagingReq(req *csi.NodeStageVolumeRequest) (nodeStageRe
 		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
 
+	volID := utils.StripName(volumeID)
 	volCap := req.GetVolumeCapability()
 	if volCap == nil {
 		return nodeStageRequest{}, status.Error(codes.InvalidArgument, "Volume capability not provided")
@@ -198,7 +210,7 @@ func (ns *node) validateStagingReq(req *csi.NodeStageVolumeRequest) (nodeStageRe
 	}
 
 	return nodeStageRequest{
-		volumeID:    volumeID,
+		volumeID:    volID,
 		fsType:      fsType,
 		stagingPath: stagingPath,
 	}, nil
@@ -252,6 +264,12 @@ func (ns *node) NodeStageVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// JivaVolume CR may be updated by jiva-operator
+	instance, err = ns.client.GetJivaVolume(reqParam.volumeID)
+	if err != nil {
+		return nil, err
+	}
+
 	instance.Spec.MountInfo.FSType = reqParam.fsType
 	instance.Spec.MountInfo.DevicePath = devicePath
 	instance.Spec.MountInfo.Path = reqParam.stagingPath
@@ -273,6 +291,7 @@ func (ns *node) NodeStageVolume(
 }
 
 func (ns *node) doesVolumeExist(volID string) (*jv.JivaVolume, error) {
+	volID = utils.StripName(volID)
 	if err := ns.client.Set(); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -396,17 +415,17 @@ func (ns *node) NodePublishVolume(
 
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
-		return nil, status.Error(codes.FailedPrecondition, "Volume ID not provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
 	}
 
 	target := req.GetTargetPath()
 	if len(target) == 0 {
-		return nil, status.Error(codes.FailedPrecondition, "Target path not provided")
+		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
 	}
 
 	volCap := req.GetVolumeCapability()
 	if volCap == nil {
-		return nil, status.Error(codes.FailedPrecondition, "Volume capability not provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume capability not provided")
 	}
 
 	if !isValidVolumeCapabilities([]*csi.VolumeCapability{volCap}) {

@@ -22,9 +22,12 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/openebs/jiva-csi/pkg/jivavolume"
+	"github.com/openebs/jiva-csi/pkg/utils"
 	"github.com/openebs/jiva-operator/pkg/apis"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -39,6 +42,8 @@ const (
 	defaultReplicaCount = "3"
 	defaultReplicaSC    = "openebs-hostpath"
 	defaultNS           = "openebs"
+	maxNameLen          = 63
+	defaultSizeBytes    = 5 * helpers.GiB
 )
 
 // Client is the wrapper over the k8s client that will be used by
@@ -87,14 +92,17 @@ func (cl *Client) RegisterAPI() error {
 
 // GetJivaVolume get the instance of JivaVolume CR.
 func (cl *Client) GetJivaVolume(name string) (*jv.JivaVolume, error) {
-	ns := "openebs"
-	instance := &jv.JivaVolume{}
-	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, instance)
+	instance, err := cl.ListJivaVolume(name)
 	if err != nil {
 		logrus.Errorf("Failed to get JivaVolume CR: %v, err: %v", name, err)
-		return instance, err
+		return nil, status.Errorf(codes.Internal, "failed to get JivaVolume CR: {%v}, err: %v", name, err)
 	}
-	return instance, nil
+
+	if len(instance.Items) == 0 {
+		return nil, status.Errorf(codes.NotFound, "failed to get JivaVolume CR: {%v}", name)
+	}
+
+	return &instance.Items[0], nil
 }
 
 // UpdateJivaVolume update the JivaVolume CR
@@ -117,7 +125,8 @@ func getDefaultLabels(pv string) map[string]string {
 // CreateJivaVolume check whether JivaVolume CR already exists and creates one
 // if it doesn't exist.
 func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
-	name := req.GetName()
+	var sizeBytes int64
+	name := utils.StripName(req.GetName())
 	sc := req.GetParameters()["replicaSC"]
 	rf := req.GetParameters()["replicaCount"]
 	ns, ok := req.GetParameters()["namespace"]
@@ -125,7 +134,14 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 		ns = defaultNS
 	}
 
-	size := resource.NewQuantity(req.GetCapacityRange().RequiredBytes, resource.BinarySI)
+	if req.GetCapacityRange() == nil {
+		logrus.Warningf("CreateVolume: capacity range is nil, provisioning with default size: %v (bytes)", defaultSizeBytes)
+		sizeBytes = defaultSizeBytes
+	} else {
+		sizeBytes = req.GetCapacityRange().RequiredBytes
+	}
+
+	size := resource.NewQuantity(sizeBytes, resource.BinarySI)
 	volSizeGiB := helpers.RoundUpToGiB(*size)
 	capacity := fmt.Sprintf("%dGi", volSizeGiB)
 	jiva := jivavolume.New().WithKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
@@ -174,32 +190,49 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 		})
 
 	if jiva.Errs != nil {
-		return fmt.Errorf("failed to build JivaVolume CR, err: %v", jiva.Errs)
+		return status.Errorf(codes.Internal, "failed to build JivaVolume CR, err: %v", jiva.Errs)
 	}
 
 	obj := jiva.Instance()
-	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, obj)
+	objExists := &jv.JivaVolume{}
+	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, objExists)
 	if err != nil && errors.IsNotFound(err) {
 		logrus.Infof("Creating a new JivaVolume CR {name: %v, namespace: %v}", name, ns)
 		err = cl.client.Create(context.TODO(), obj)
 		if err != nil {
-			return fmt.Errorf("failed to create JivaVolume CR, err: %v", err)
+			return status.Errorf(codes.Internal, "failed to create JivaVolume CR, err: %v", err)
 		}
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("failed to get the JivaVolume details, err: %v", err)
+		return status.Errorf(codes.Internal, "failed to get the JivaVolume details, err: %v", err)
 	}
+
+	if objExists.Spec.Capacity != obj.Spec.Capacity {
+		return status.Errorf(codes.AlreadyExists, "failed to create JivaVolume CR, volume with different size already exists")
+	}
+
 	return nil
 }
 
-// DeleteJivaVolume delete the JivaVolume CR
-func (cl *Client) DeleteJivaVolume(req *csi.DeleteVolumeRequest) error {
-	volumeID := req.GetVolumeId()
+// ListJivaVolume returns the list of JivaVolume resources
+func (cl *Client) ListJivaVolume(volumeID string) (*jv.JivaVolumeList, error) {
+	volumeID = utils.StripName(volumeID)
 	obj := &jv.JivaVolumeList{}
 	opts := []client.ListOption{
 		client.MatchingLabels(getDefaultLabels(volumeID)),
 	}
+
 	if err := cl.client.List(context.TODO(), obj, opts...); err != nil {
+		return nil, err
+	}
+
+	return obj, nil
+}
+
+// DeleteJivaVolume delete the JivaVolume CR
+func (cl *Client) DeleteJivaVolume(volumeID string) error {
+	obj, err := cl.ListJivaVolume(volumeID)
+	if err != nil {
 		return err
 	}
 
@@ -207,6 +240,7 @@ func (cl *Client) DeleteJivaVolume(req *csi.DeleteVolumeRequest) error {
 		logrus.Warningf("DeleteVolume: JivaVolume: {%v}, not found, ignore deletion...", volumeID)
 		return nil
 	}
+
 	logrus.Debugf("DeleteVolume: object: {%+v}", obj)
 	instance := obj.Items[0].DeepCopy()
 	if err := cl.client.Delete(context.TODO(), instance); err != nil {
