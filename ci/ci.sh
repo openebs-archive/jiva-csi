@@ -18,17 +18,17 @@ EOT
 
 function dumpLogs() {
 	echo "========================== Dump logs ==========================="
-	RESOURCE=$1
-	COMPONENT=$2
-	NS=$3
-	LABEL=$4
-	CONTAINER=$5
-	POD=$(kubectl get pod -n $NS -l $LABEL -o jsonpath='{range .items[*]}{@.metadata.name}')
-	if [ -n $CONTAINER ];
+	local RESOURCE=$1
+	local COMPONENT=$2
+	local NS=$3
+	local LABEL=$4
+	local CONTAINER=$5
+	local POD=$(kubectl get pod -n $NS -l $LABEL -o jsonpath='{range .items[*]}{@.metadata.name}')
+	if [ -z $CONTAINER ];
 	then
-		kubectl logs --tail=50 $POD -n $NS -c $CONTAINER
-	else
 		kubectl logs --tail=50 $POD -n $NS
+	else
+		kubectl logs --tail=50 $POD -n $NS -c $CONTAINER
 	fi
 }
 
@@ -44,33 +44,33 @@ function dumpAllLogs() {
 
 function waitForComponent() {
 	echo "====================== Wait for component ======================"
-  RESOURCE=$1
-  COMPONENT=$2
-  NS=$3
-	CONTAINER=$4
-	replicas=""
+	local RESOURCE=$1
+	local COMPONENT=$2
+	local NS=$3
+	local CONTAINER=$4
+	local replicas=""
 
-  for i in $(seq 1 50) ; do
-    kubectl get $RESOURCE -n ${NS} ${COMPONENT}
+	for i in $(seq 1 50) ; do
+		kubectl get $RESOURCE -n ${NS} ${COMPONENT}
 		if [ "$RESOURCE" == "ds" ] || [ "$RESOURCE" == "daemonset" ];
 		then
 			replicas=$(kubectl get $RESOURCE -n ${NS} ${COMPONENT} -o json | jq ".status.numberReady")
 		else
 			replicas=$(kubectl get $RESOURCE -n ${NS} ${COMPONENT} -o json | jq ".status.readyReplicas")
 		fi
-    if [ "$replicas" == "1" ];
+		if [ "$replicas" == "1" ];
 		then
 			echo "${COMPONENT} is ready"
-      break
-    else
-      echo "Waiting for ${COMPONENT} to be ready"
-      if [ $i -eq "50" ];
-      then
+			break
+		else
+			echo "Waiting for ${COMPONENT} to be ready"
+			if [ $i -eq "50" ];
+			then
 				dumpAllLogs
-      fi
-    fi
-    sleep 10
-  done
+			fi
+		fi
+		sleep 10
+	done
 }
 
 function initializeCSISanitySuite() {
