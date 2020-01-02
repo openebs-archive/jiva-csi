@@ -249,7 +249,7 @@ func (ns *node) NodeStageVolume(
 	}
 
 	// Volume may be mounted at targetPath (bind mount in NodePublish)
-	if err := ns.isAlreadyMounted(reqParam.volumeID); err != nil {
+	if err := ns.isAlreadyMounted(reqParam.volumeID, reqParam.stagingPath); err != nil {
 		return nil, err
 	}
 
@@ -439,7 +439,7 @@ func (ns *node) NodePublishVolume(
 	}
 
 	// Volume may be mounted at targetPath (bind mount in NodePublish)
-	if err := ns.isAlreadyMounted(volumeID); err != nil {
+	if err := ns.isAlreadyMounted(volumeID, target); err != nil {
 		return nil, err
 	}
 
@@ -531,7 +531,7 @@ func (ns *node) NodeUnpublishVolume(
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (ns *node) isAlreadyMounted(volID string) error {
+func (ns *node) isAlreadyMounted(volID string, path string) error {
 	var currentMounts []string
 	mountList, err := ns.mounter.List()
 	if err != nil {
@@ -544,8 +544,16 @@ func (ns *node) isAlreadyMounted(volID string) error {
 		}
 	}
 
+	// if volume is mounted at more than one place, unmount from
+	// other places apart from given "path"
 	if len(currentMounts) > 1 {
-		return fmt.Errorf("Volume is already mounted at more than one place: {%v}", currentMounts)
+		for _, cur := range currentMounts {
+			if cur != path {
+				if err := ns.unmount(volID, cur); err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	return nil
