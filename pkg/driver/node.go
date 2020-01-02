@@ -561,13 +561,8 @@ func (ns *node) isAlreadyMounted(volID string, path string) error {
 
 func (ns *node) unmount(volumeID, target string) error {
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(target)
-	if err != nil && !os.IsNotExist(err) {
+	if (err == nil && notMnt) || os.IsNotExist(err) {
 		logrus.Warningf("Volume: %s is not mounted, err: %v", target, err)
-		return nil
-	}
-
-	if notMnt {
-		logrus.Infof("Volume: %s has been unmounted already", volumeID)
 		return nil
 	}
 
