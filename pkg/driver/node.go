@@ -232,7 +232,7 @@ func (ns *node) NodeStageVolume(
 	}
 	logrus.Infof("NodeStageVolume: start volume: {%q} operation", reqParam.volumeID)
 	if ok := ns.volumeTransition.Insert(reqParam.volumeID); !ok {
-		msg := fmt.Sprintf("request to stage volume=%q is already in progress", reqParam.volumeID)
+		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", reqParam.volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 	defer func() {
@@ -331,7 +331,7 @@ func (ns *node) NodeUnstageVolume(
 	}
 
 	if ok := ns.volumeTransition.Insert(volID); !ok {
-		msg := fmt.Sprintf("request to unstage volume=%q is already in progress", volID)
+		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
@@ -450,7 +450,7 @@ func (ns *node) NodePublishVolume(
 
 	logrus.Infof("NodePublishVolume: start volume: {%q} operation", volumeID)
 	if ok := ns.volumeTransition.Insert(volumeID); !ok {
-		msg := fmt.Sprintf("request to publish volume=%q is already in progress", volumeID)
+		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
@@ -546,7 +546,7 @@ func (ns *node) NodeUnpublishVolume(
 	}
 
 	if ok := ns.volumeTransition.Insert(volumeID); !ok {
-		msg := fmt.Sprintf("request to unpublish volume=%q is already in progress", volumeID)
+		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
