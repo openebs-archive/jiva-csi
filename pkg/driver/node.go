@@ -330,6 +330,16 @@ func (ns *node) NodeUnstageVolume(
 		return nil, status.Error(codes.InvalidArgument, "Staging target not provided")
 	}
 
+	if ok := ns.volumeTransition.Insert(volID); !ok {
+		msg := fmt.Sprintf("request to unstage volume=%q is already in progress", volID)
+		return nil, status.Error(codes.Aborted, msg)
+	}
+
+	defer func() {
+		logrus.Infof("NodeUnstageVolume: volume: {%q} operation finished", volID)
+		ns.volumeTransition.Delete(volID)
+	}()
+
 	// Check if target directory is a mount point. GetDeviceNameFromMount
 	// given a mnt point, finds the device from /proc/mounts
 	// returns the device name, reference count, and error code
@@ -440,7 +450,7 @@ func (ns *node) NodePublishVolume(
 
 	logrus.Infof("NodePublishVolume: start volume: {%q} operation", volumeID)
 	if ok := ns.volumeTransition.Insert(volumeID); !ok {
-		msg := fmt.Sprintf("request to stage volume=%q is already in progress", volumeID)
+		msg := fmt.Sprintf("request to publish volume=%q is already in progress", volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
@@ -534,6 +544,16 @@ func (ns *node) NodeUnpublishVolume(
 	if len(target) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
 	}
+
+	if ok := ns.volumeTransition.Insert(volumeID); !ok {
+		msg := fmt.Sprintf("request to unpublish volume=%q is already in progress", volumeID)
+		return nil, status.Error(codes.Aborted, msg)
+	}
+
+	defer func() {
+		logrus.Infof("NodeUnPublishVolume: volume: {%q} operation finished", volumeID)
+		ns.volumeTransition.Delete(volumeID)
+	}()
 
 	if err := ns.unmount(volumeID, target); err != nil {
 		return nil, err
