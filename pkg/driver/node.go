@@ -438,6 +438,17 @@ func (ns *node) NodePublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Volume capability not supported")
 	}
 
+	logrus.Infof("NodePublishVolume: start volume: {%q} operation", volumeID)
+	if ok := ns.volumeTransition.Insert(volumeID); !ok {
+		msg := fmt.Sprintf("request to stage volume=%q is already in progress", volumeID)
+		return nil, status.Error(codes.Aborted, msg)
+	}
+
+	defer func() {
+		logrus.Infof("NodePublishVolume: volume: {%q} operation finished", volumeID)
+		ns.volumeTransition.Delete(volumeID)
+	}()
+
 	// Volume may be mounted at targetPath (bind mount in NodePublish)
 	if err := ns.isAlreadyMounted(volumeID, target); err != nil {
 		return nil, err
@@ -531,8 +542,8 @@ func (ns *node) NodeUnpublishVolume(
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func (ns *node) isAlreadyMounted(volID string, path string) error {
-	var currentMounts []string
+func (ns *node) isAlreadyMounted(volID, path string) error {
+	currentMounts := map[string]bool{}
 	mountList, err := ns.mounter.List()
 	if err != nil {
 		return fmt.Errorf("Failed to list mount paths")
@@ -540,20 +551,19 @@ func (ns *node) isAlreadyMounted(volID string, path string) error {
 
 	for _, mntInfo := range mountList {
 		if strings.Contains(mntInfo.Path, volID) {
-			currentMounts = append(currentMounts, mntInfo.Path)
+			currentMounts[mntInfo.Path] = true
 		}
 	}
 
-	// if volume is mounted at more than one place, unmount from
-	// other places apart from given "path"
+	// if volume is mounted at more than one place check if this request is
+	// for the same path that is already mounted. Return nil if the path is
+	// mounted already else return err so that it gets unmounted in the
+	// next subsequent calls in respective rpc calls (NodeUnpublishVolume, NodeUnstageVolume)
 	if len(currentMounts) > 1 {
-		for _, cur := range currentMounts {
-			if cur != path {
-				if err := ns.unmount(volID, cur); err != nil {
-					return err
-				}
-			}
+		if mounted, ok := currentMounts[path]; ok && mounted {
+			return nil
 		}
+		return fmt.Errorf("Volume is already mounted at more than one place: {%v}", currentMounts)
 	}
 
 	return nil
