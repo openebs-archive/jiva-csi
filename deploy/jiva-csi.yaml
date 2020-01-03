@@ -284,13 +284,13 @@ spec:
             # metricsBindAddress is the TCP address that the controller should bind to
             # for serving prometheus metrics. Change the port if 9505 is already in use.
             # Remove the flag to disable prometheus metrics.
-            - "--metricsBindAddress=$(METRICS_BIND_ADDRESS):9505"
+            - "--metricsBindAddress=$(OPENEBS_POD_IP):9505"
           env:
             - name: OPENEBS_NODE_ID
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            - name: METRICS_BIND_ADDRESS
+            - name: OPENEBS_POD_IP
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
