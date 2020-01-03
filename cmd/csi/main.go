@@ -31,6 +31,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog"
 	k8scfg "sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // log2LogrusWriter implement io.Writer interface used to enable
@@ -50,7 +51,8 @@ func (w *log2LogrusWriter) Write(b []byte) (int, error) {
 }
 
 var (
-	enableISCSIDebug bool
+	enableISCSIDebug   bool
+	metricsBindAddress string
 )
 
 /*
@@ -105,6 +107,10 @@ func main() {
 		&driver.MaxRetryCount, "retrycount", 5, "Max retry count to check if volume is ready",
 	)
 
+	cmd.PersistentFlags().StringVar(
+		&metricsBindAddress, "metricsBindAddress", "0", "TCP address that the controller should bind to for serving prometheus metrics.",
+	)
+
 	err := cmd.Execute()
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%s", err.Error())
@@ -145,7 +151,9 @@ func run(config *config.Config) {
 		logrus.Fatalf("error creating client from config: %v", err)
 	}
 
-	if err := cli.RegisterAPI(); err != nil {
+	if err := cli.RegisterAPI(manager.Options{
+		MetricsBindAddress: metricsBindAddress,
+	}); err != nil {
 		logrus.Fatalf("error registering API: %v", err)
 	}
 
