@@ -24,6 +24,7 @@ func NewTransition() *Transition {
 }
 
 // Insert insert the volume create req hash into map
+// TODO: Add request info as well to know about which request is in progress
 func (t *Transition) Insert(volID string) bool {
 	t.mux.Lock()
 	defer t.mux.Unlock()

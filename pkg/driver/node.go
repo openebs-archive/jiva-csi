@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -231,7 +232,7 @@ func (ns *node) NodeStageVolume(
 	}
 	logrus.Infof("NodeStageVolume: start volume: {%q} operation", reqParam.volumeID)
 	if ok := ns.volumeTransition.Insert(reqParam.volumeID); !ok {
-		msg := fmt.Sprintf("request to stage volume=%q is already in progress", reqParam.volumeID)
+		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", reqParam.volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 	defer func() {
@@ -245,6 +246,11 @@ func (ns *node) NodeStageVolume(
 	instance, err := ns.waitForVolumeToBeReady(reqParam.volumeID)
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
+
+	// Volume may be mounted at targetPath (bind mount in NodePublish)
+	if err := ns.isAlreadyMounted(reqParam.volumeID, reqParam.stagingPath); err != nil {
+		return nil, err
 	}
 
 	// A temporary TCP connection is made to the volume to check if its
@@ -323,6 +329,16 @@ func (ns *node) NodeUnstageVolume(
 	if len(target) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Staging target not provided")
 	}
+
+	if ok := ns.volumeTransition.Insert(volID); !ok {
+		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volID)
+		return nil, status.Error(codes.Aborted, msg)
+	}
+
+	defer func() {
+		logrus.Infof("NodeUnstageVolume: volume: {%q} operation finished", volID)
+		ns.volumeTransition.Delete(volID)
+	}()
 
 	// Check if target directory is a mount point. GetDeviceNameFromMount
 	// given a mnt point, finds the device from /proc/mounts
@@ -432,6 +448,22 @@ func (ns *node) NodePublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Volume capability not supported")
 	}
 
+	logrus.Infof("NodePublishVolume: start volume: {%q} operation", volumeID)
+	if ok := ns.volumeTransition.Insert(volumeID); !ok {
+		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volumeID)
+		return nil, status.Error(codes.Aborted, msg)
+	}
+
+	defer func() {
+		logrus.Infof("NodePublishVolume: volume: {%q} operation finished", volumeID)
+		ns.volumeTransition.Delete(volumeID)
+	}()
+
+	// Volume may be mounted at targetPath (bind mount in NodePublish)
+	if err := ns.isAlreadyMounted(volumeID, target); err != nil {
+		return nil, err
+	}
+
 	mountOptions := []string{"bind"}
 	if req.GetReadonly() {
 		mountOptions = append(mountOptions, "ro")
@@ -444,6 +476,7 @@ func (ns *node) NodePublishVolume(
 			return nil, err
 		}
 	}
+
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -512,17 +545,62 @@ func (ns *node) NodeUnpublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
 	}
 
-	notMnt, err := ns.mounter.IsLikelyNotMountPoint(target)
-	if (err == nil && notMnt) || os.IsNotExist(err) {
-		logrus.Warningf("NodeUnpublishVolume: %s is not mounted, err: %v", target, err)
-		return &csi.NodeUnpublishVolumeResponse{}, nil
+	if ok := ns.volumeTransition.Insert(volumeID); !ok {
+		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volumeID)
+		return nil, status.Error(codes.Aborted, msg)
 	}
 
-	logrus.Infof("NodeUnpublishVolume: unmounting %s", target)
-	if err := ns.mounter.Unmount(target); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not unmount %q: %v", target, err)
+	defer func() {
+		logrus.Infof("NodeUnPublishVolume: volume: {%q} operation finished", volumeID)
+		ns.volumeTransition.Delete(volumeID)
+	}()
+
+	if err := ns.unmount(volumeID, target); err != nil {
+		return nil, err
 	}
+
 	return &csi.NodeUnpublishVolumeResponse{}, nil
+}
+
+func (ns *node) isAlreadyMounted(volID, path string) error {
+	currentMounts := map[string]bool{}
+	mountList, err := ns.mounter.List()
+	if err != nil {
+		return fmt.Errorf("Failed to list mount paths")
+	}
+
+	for _, mntInfo := range mountList {
+		if strings.Contains(mntInfo.Path, volID) {
+			currentMounts[mntInfo.Path] = true
+		}
+	}
+
+	// if volume is mounted at more than one place check if this request is
+	// for the same path that is already mounted. Return nil if the path is
+	// mounted already else return err so that it gets unmounted in the
+	// next subsequent calls in respective rpc calls (NodeUnpublishVolume, NodeUnstageVolume)
+	if len(currentMounts) > 1 {
+		if mounted, ok := currentMounts[path]; ok && mounted {
+			return nil
+		}
+		return fmt.Errorf("Volume is already mounted at more than one place: {%v}", currentMounts)
+	}
+
+	return nil
+}
+
+func (ns *node) unmount(volumeID, target string) error {
+	notMnt, err := ns.mounter.IsLikelyNotMountPoint(target)
+	if (err == nil && notMnt) || os.IsNotExist(err) {
+		logrus.Warningf("Volume: %s is not mounted, err: %v", target, err)
+		return nil
+	}
+
+	logrus.Infof("Unmounting: %s", target)
+	if err := ns.mounter.Unmount(target); err != nil {
+		return status.Errorf(codes.Internal, "Could not unmount %q: %v", target, err)
+	}
+	return nil
 }
 
 // NodeGetInfo returns node details
