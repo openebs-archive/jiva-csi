@@ -281,6 +281,11 @@ spec:
             # This count has been set to 30 for sanity test cases as it takes
             # time in minikube
             - "--retrycount=30"
+            # metricsBindAddress is the TCP address that the controller should bind to
+            # for serving prometheus metrics. By default the address is set to localhost:9505.
+            # The address can be configured to any desired address.
+            # Remove the flag to disable prometheus metrics.
+            - "--metricsBindAddress=:9505"
           env:
             - name: OPENEBS_NODE_ID
               valueFrom:
