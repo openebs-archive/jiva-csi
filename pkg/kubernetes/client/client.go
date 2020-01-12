@@ -77,8 +77,8 @@ func (cl *Client) Set() error {
 
 // RegisterAPI registers the API scheme in the client using the manager.
 // This function needs to be called only once a client object
-func (cl *Client) RegisterAPI() error {
-	mgr, err := manager.New(cl.cfg, manager.Options{})
+func (cl *Client) RegisterAPI(opts manager.Options) error {
+	mgr, err := manager.New(cl.cfg, opts)
 	if err != nil {
 		return err
 	}
