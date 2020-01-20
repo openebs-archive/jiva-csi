@@ -269,7 +269,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - "--name=jiva.csi.openebs.io"
-            - "--nodeid=$(OPENEBS_NODEID)"
+            - "--nodeid=$(OPENEBS_NODE_ID)"
             - "--endpoint=$(OPENEBS_CSI_ENDPOINT)"
             - "--plugin=$(OPENEBS_NODE_DRIVER)"
             # enableiscsidebug is used to enable debug logs for iscsi operations
