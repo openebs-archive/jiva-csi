@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	defaultReplicaCount = "3"
+	defaultReplicaCount = 3
 	defaultReplicaSC    = "openebs-hostpath"
 	defaultNS           = "openebs"
 	maxNameLen          = 63
@@ -127,13 +127,16 @@ func getDefaultLabels(pv string) map[string]string {
 func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	var sizeBytes int64
 	name := utils.StripName(req.GetName())
-	sc := req.GetParameters()["replicaSC"]
-	rf := req.GetParameters()["replicaCount"]
+	policyName := req.GetParameters()["policy"]
 	ns, ok := req.GetParameters()["namespace"]
 	if !ok {
 		ns = defaultNS
 	}
-
+	policy := &jv.JivaVolumePolicy{}
+	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: policyName, Namespace: defaultNS}, policy)
+	if err != nil && !errors.IsNotFound(err) {
+		status.Errorf(codes.Internal, "failed to get JivaVolumePolicy CR, err: %v", err)
+	}
 	if req.GetCapacityRange() == nil {
 		logrus.Warningf("CreateVolume: capacity range is nil, provisioning with default size: {%v (bytes)}", defaultSizeBytes)
 		sizeBytes = defaultSizeBytes
@@ -150,43 +153,58 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 		WithSpec(jv.JivaVolumeSpec{
 			PV:       name,
 			Capacity: capacity,
-			ReplicaSC: func(sc string) string {
-				if sc == "" {
-					return defaultReplicaSC
-				}
-				return sc
-			}(sc),
-			ReplicaResource: func(req *csi.CreateVolumeRequest) v1.ResourceRequirements {
-				return v1.ResourceRequirements{
-					Requests: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMinCPU")),
-						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMinMemory")),
-					},
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMaxCPU")),
-						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMaxMemory")),
-					},
-				}
-			}(req),
+			Policy: &jv.JivaVolumePolicySpec{
+				ReplicaSC: func(sc string) string {
+					if sc == "" {
+						return defaultReplicaSC
+					}
+					return sc
+				}(policy.Spec.ReplicaSC),
+				Replica: jv.ReplicaSpec{
+					PodTemplateResources: jv.PodTemplateResources{
+						Resources: func(req *v1.ResourceRequirements) *v1.ResourceRequirements {
+							if req != nil {
+								return req
+							}
+							return &v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("0"),
+									v1.ResourceMemory: resource.MustParse("0"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("0"),
+									v1.ResourceMemory: resource.MustParse("0"),
+								},
+							}
+						}(policy.Spec.Replica.Resources),
+					}},
 
-			TargetResource: func(req *csi.CreateVolumeRequest) v1.ResourceRequirements {
-				return v1.ResourceRequirements{
-					Requests: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("targetMinCPU")),
-						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("targetMinMemory")),
-					},
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("targetMaxCPU")),
-						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("targetMaxMemory")),
-					},
-				}
-			}(req),
-			ReplicationFactor: func(rf string) string {
-				if rf == "" {
-					return defaultReplicaCount
-				}
-				return rf
-			}(rf),
+				Target: jv.TargetSpec{
+					Monitor: false,
+					ReplicationFactor: func(rf int) int {
+						if rf == 0 {
+							return defaultReplicaCount
+						}
+						return rf
+					}(policy.Spec.Target.ReplicationFactor),
+					PodTemplateResources: jv.PodTemplateResources{
+						Resources: func(req *v1.ResourceRequirements) *v1.ResourceRequirements {
+							if req != nil {
+								return req
+							}
+							return &v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("0"),
+									v1.ResourceMemory: resource.MustParse("0"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceCPU:    resource.MustParse("0"),
+									v1.ResourceMemory: resource.MustParse("0"),
+								},
+							}
+						}(policy.Spec.Target.Resources),
+					}},
+			},
 		})
 
 	if jiva.Errs != nil {
@@ -195,7 +213,7 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 
 	obj := jiva.Instance()
 	objExists := &jv.JivaVolume{}
-	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, objExists)
+	err = cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, objExists)
 	if err != nil && errors.IsNotFound(err) {
 		logrus.Infof("Creating a new JivaVolume CR {name: %v, namespace: %v}", name, ns)
 		err = cl.client.Create(context.TODO(), obj)

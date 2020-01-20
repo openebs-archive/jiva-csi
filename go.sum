@@ -450,6 +450,8 @@ github.com/sclevine/spec v1.0.0/go.mod h1:W4J29eT/Kzv7/b9IWLB055Z+qvVC9vt0Arko24
 github.com/sclevine/spec v1.2.0/go.mod h1:W4J29eT/Kzv7/b9IWLB055Z+qvVC9vt0Arko24q7p+U=
 github.com/seccomp/libseccomp-golang v0.0.0-20150813023252-1b506fc7c24e/go.mod h1:GbW5+tmTXfcxTToHLXlScSlAvWlF4P2Ca7zGrPiEpWo=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
+github.com/shubham14bajpai/jiva-operator v0.0.0-20200117092318-399d844fdbbd h1:qJUi82v4QaFG2HHGDHpLn+/RUg4XKC0ivwywt2yKpK8=
+github.com/shubham14bajpai/jiva-operator v0.0.0-20200117092318-399d844fdbbd/go.mod h1:xxGmb6r4sZaY02Z9/iUMNgOvwXnZIp8pvAW0nHyK9B4=
 github.com/shurcooL/sanitized_anchor_name v0.0.0-20151028001915-10ef21a441db/go.mod h1:1NzhyTcUVG4SuEtjjoZeVRXNmyL/1OwPU0+IJeTBvfc=
 github.com/sigma/go-inotify v0.0.0-20181102212354-c87b6cf5033d/go.mod h1:stlh9OsqBQSdwxTxX73mu41BBtRbIpZLQ7flcAoxAfo=
 github.com/sirupsen/logrus v1.1.1/go.mod h1:zrgwTnHtNr00buQ1vSptGe8m1f/BbgsPukg8qsT7A+A=

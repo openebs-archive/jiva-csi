@@ -47,7 +47,7 @@ rules:
     resources: ["events"]
     verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: ["*"]
-    resources: ["jivavolumes"]
+    resources: ["jivavolumes", "jivavolumepolicies"]
     verbs: ["*"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
@@ -113,7 +113,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: openebs-jiva-csi-plugin
-          image: openebs/jiva-csi:ci
+          image: openebs/jiva-csi:policy
           imagePullPolicy: IfNotPresent
           env:
             - name: OPENEBS_JIVA_CSI_CONTROLLER

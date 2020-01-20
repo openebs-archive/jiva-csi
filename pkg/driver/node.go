@@ -394,6 +394,15 @@ func (ns *node) NodePublishVolume(
 	// Volume may be mounted at targetPath (bind mount in NodePublish)
 	if err := ns.isAlreadyMounted(volumeID, target); err != nil {
 		return nil, err
+	// JivaVolume CR may be updated by jiva-operator
+	instance, err := ns.client.GetJivaVolume(req.VolumeId)
+	if err != nil {
+		return nil, err
+	}
+
+	instance.Spec.MountInfo.TargetPath = target
+	if err := ns.client.UpdateJivaVolume(instance); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	mountOptions := []string{"bind"}
