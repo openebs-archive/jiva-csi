@@ -229,6 +229,20 @@ func (cl *Client) ListJivaVolume(volumeID string) (*jv.JivaVolumeList, error) {
 	return obj, nil
 }
 
+// ListJivaVolumeWithOpts returns the list of JivaVolume resources
+func (cl *Client) ListJivaVolumeWithOpts(opts map[string]string) (*jv.JivaVolumeList, error) {
+	obj := &jv.JivaVolumeList{}
+	options := []client.ListOption{
+		client.MatchingLabels(opts),
+	}
+
+	if err := cl.client.List(context.TODO(), obj, options...); err != nil {
+		return nil, err
+	}
+
+	return obj, nil
+}
+
 // DeleteJivaVolume delete the JivaVolume CR
 func (cl *Client) DeleteJivaVolume(volumeID string) error {
 	obj, err := cl.ListJivaVolume(volumeID)

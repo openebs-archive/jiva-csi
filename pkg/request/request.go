@@ -4,28 +4,33 @@ import (
 	"sync"
 )
 
-// Interface is used to handle the inflight requests
-type Interface interface {
-	String() string
-}
-
 // Transition is a struct used to manage inflight volume creation request.
 type Transition struct {
 	mux    *sync.Mutex
-	volume map[string]bool
+	volume map[string]string
 }
 
 // NewTransition instanciates Transition.
 func NewTransition() *Transition {
 	return &Transition{
 		mux:    &sync.Mutex{},
-		volume: make(map[string]bool),
+		volume: make(map[string]string),
 	}
 }
 
+func (t *Transition) GetOperation(volID string) string {
+	t.mux.Lock()
+	defer t.mux.Unlock()
+
+	_, ok := t.volume[volID]
+	if ok {
+		return t.volume[volID]
+	}
+	return ""
+}
+
 // Insert insert the volume create req hash into map
-// TODO: Add request info as well to know about which request is in progress
-func (t *Transition) Insert(volID string) bool {
+func (t *Transition) Insert(volID string, ops string) bool {
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
@@ -34,7 +39,7 @@ func (t *Transition) Insert(volID string) bool {
 		return false
 	}
 
-	t.volume[volID] = true
+	t.volume[volID] = ops
 	return true
 }
 

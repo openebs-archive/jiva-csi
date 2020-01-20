@@ -297,6 +297,10 @@ spec:
               value: node
             - name: OPENEBS_NAMESPACE
               value: openebs
+            # REMOUNT: if set true/True volume will be automatically remounted
+            # in case if the mountpoint goes to ro state
+            - name: REMOUNT
+              value: True
           volumeMounts:
             - name: plugin-dir
               mountPath: /plugin

@@ -80,17 +80,17 @@ type node struct {
 	client           *client.Client
 	driver           *CSIDriver
 	mounter          *NodeMounter
-	volumeTransition *request.Transition
+	VolumeTransition *request.Transition
 }
 
 // NewNode returns a new instance
 // of CSI NodeServer
-func NewNode(d *CSIDriver, cli *client.Client) csi.NodeServer {
+func NewNode(d *CSIDriver, cli *client.Client) *node {
 	return &node{
 		client:           cli,
 		driver:           d,
 		mounter:          newNodeMounter(),
-		volumeTransition: request.NewTransition(),
+		VolumeTransition: request.NewTransition(),
 	}
 }
 
@@ -121,7 +121,7 @@ func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
 	var sleepInterval time.Duration = 0
 	for {
 		time.Sleep(sleepInterval * time.Second)
-		instance, err := ns.doesVolumeExist(volID)
+		instance, err := doesVolumeExist(volID, ns.client)
 		if err != nil {
 			return nil, err
 		}
@@ -232,19 +232,19 @@ func (ns *node) NodeStageVolume(
 		return nil, err
 	}
 	logrus.Infof("NodeStageVolume: start volume: {%q} operation", reqParam.volumeID)
-	if ok := ns.volumeTransition.Insert(reqParam.volumeID); !ok {
-		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", reqParam.volumeID)
+	if ok := ns.VolumeTransition.Insert(reqParam.volumeID, "NodeStage"); !ok {
+		msg := fmt.Sprintf("%s operation on this volume=%q is already in progress", ns.VolumeTransition.GetOperation(reqParam.volumeID), reqParam.volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 	defer func() {
 		logrus.Infof("NodeStageVolume: volume: {%q} operation finished", reqParam.volumeID)
-		ns.volumeTransition.Delete(reqParam.volumeID)
+		ns.VolumeTransition.Delete(reqParam.volumeID)
 	}()
 
 	// Check if volume is ready to serve IOs,
 	// info is fetched from the JivaVolume CR
 	logrus.Debug("NodeStageVolume: wait for the volume to be ready")
-	instance, err := ns.waitForVolumeToBeReady(reqParam.volumeID)
+	instance, err := waitForVolumeToBeReady(reqParam.volumeID, ns.client)
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
@@ -257,7 +257,7 @@ func (ns *node) NodeStageVolume(
 	// A temporary TCP connection is made to the volume to check if its
 	// reachable
 	logrus.Debug("NodeStageVolume: wait for the iscsi target to be ready")
-	if err := ns.waitForVolumeToBeReachable(
+	if err := waitForVolumeToBeReachable(
 		fmt.Sprintf("%v:%v", instance.Spec.ISCSISpec.TargetIP,
 			instance.Spec.ISCSISpec.TargetPort),
 	); err != nil {
@@ -279,7 +279,8 @@ func (ns *node) NodeStageVolume(
 
 	instance.Spec.MountInfo.FSType = reqParam.fsType
 	instance.Spec.MountInfo.DevicePath = devicePath
-	instance.Spec.MountInfo.Path = reqParam.stagingPath
+	instance.Spec.MountInfo.StagingPath = reqParam.stagingPath
+	instance.Labels["nodeID"] = ns.driver.config.NodeID
 	if err := ns.client.UpdateJivaVolume(instance); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -331,14 +332,14 @@ func (ns *node) NodeUnstageVolume(
 		return nil, status.Error(codes.InvalidArgument, "Staging target not provided")
 	}
 
-	if ok := ns.volumeTransition.Insert(volID); !ok {
-		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volID)
+	if ok := ns.VolumeTransition.Insert(volID, "NodeUnstageVolume"); !ok {
+		msg := fmt.Sprintf("%s operation on this volume=%q is already in progress", ns.VolumeTransition.GetOperation(volID), volID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
 	defer func() {
 		logrus.Infof("NodeUnstageVolume: volume: {%q} operation finished", volID)
-		ns.volumeTransition.Delete(volID)
+		ns.VolumeTransition.Delete(volID)
 	}()
 
 	// Check if target directory is a mount point. GetDeviceNameFromMount
@@ -368,7 +369,7 @@ func (ns *node) NodeUnstageVolume(
 		return nil, status.Errorf(codes.Internal, "Could not unmount target %q: %v", target, err)
 	}
 
-	instance, err := ns.doesVolumeExist(volID)
+	instance, err := doesVolumeExist(volID, ns.client)
 	if err != nil {
 		return nil, err
 	}
@@ -379,8 +380,15 @@ func (ns *node) NodeUnstageVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	if err := os.RemoveAll(instance.Spec.MountInfo.Path); err != nil {
+	if err := os.RemoveAll(instance.Spec.MountInfo.StagingPath); err != nil {
 		logrus.Errorf("Failed to remove mount path, err: %v", err)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	// Setting to empty
+	instance.Spec.MountInfo.StagingPath = ""
+	instance.Labels["nodeID"] = ""
+	if err := ns.client.UpdateJivaVolume(instance); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -450,14 +458,14 @@ func (ns *node) NodePublishVolume(
 	}
 
 	logrus.Infof("NodePublishVolume: start volume: {%q} operation", volumeID)
-	if ok := ns.volumeTransition.Insert(volumeID); !ok {
-		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volumeID)
+	if ok := ns.VolumeTransition.Insert(volumeID, "NodePublishVolume"); !ok {
+		msg := fmt.Sprintf("%s operation on this volume=%q is already in progress", ns.VolumeTransition.GetOperation(volumeID), volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
 	defer func() {
 		logrus.Infof("NodePublishVolume: volume: {%q} operation finished", volumeID)
-		ns.volumeTransition.Delete(volumeID)
+		ns.VolumeTransition.Delete(volumeID)
 	}()
 
 	// Volume may be mounted at targetPath (bind mount in NodePublish)
@@ -476,6 +484,16 @@ func (ns *node) NodePublishVolume(
 		if err := ns.nodePublishVolumeForFileSystem(req, mountOptions, mode); err != nil {
 			return nil, err
 		}
+	}
+
+	instance, err := doesVolumeExist(volumeID, ns.client)
+	if err != nil {
+		return nil, err
+	}
+
+	instance.Spec.MountInfo.TargetPath = target
+	if err := ns.client.UpdateJivaVolume(instance); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
@@ -546,18 +564,28 @@ func (ns *node) NodeUnpublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
 	}
 
-	if ok := ns.volumeTransition.Insert(volumeID); !ok {
-		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volumeID)
+	if ok := ns.VolumeTransition.Insert(volumeID, "NodeUnpublishVolume"); !ok {
+		msg := fmt.Sprintf("%s operation on this volume=%q is already in progress", ns.VolumeTransition.GetOperation(volumeID), volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
 	defer func() {
 		logrus.Infof("NodeUnPublishVolume: volume: {%q} operation finished", volumeID)
-		ns.volumeTransition.Delete(volumeID)
+		ns.VolumeTransition.Delete(volumeID)
 	}()
 
 	if err := ns.unmount(volumeID, target); err != nil {
 		return nil, err
+	}
+
+	instance, err := doesVolumeExist(volumeID, ns.client)
+	if err != nil {
+		return nil, err
+	}
+
+	instance.Spec.MountInfo.TargetPath = ""
+	if err := ns.client.UpdateJivaVolume(instance); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil

@@ -17,24 +17,313 @@ limitations under the License.
 package driver
 
 import (
+	"fmt"
+	"net"
+	"time"
+
+	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
+	"github.com/openebs/jiva-csi/pkg/request"
+	"github.com/openebs/jiva-csi/pkg/utils"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/kubernetes/pkg/util/mount"
 )
+
+const (
+	// MonitorMountRetryTimeout indicates the time gap between two consecutive
+	//monitoring attempts
+	MonitorMountRetryTimeout = 5
+)
+
+type Optfunc func(*NodeMounter)
 
 // NodeMounter embeds the SafeFormatAndMount struct
 type NodeMounter struct {
 	mount.SafeFormatAndMount
+	client *client.Client
+	nodeID string
+	req    *request.Transition
 }
 
 func newNodeMounter() *NodeMounter {
-	return &NodeMounter{
-		mount.SafeFormatAndMount{
-			Interface: mount.New(""),
-			Exec:      mount.NewOsExec(),
-		},
+	nm := new(NodeMounter)
+	nm.Interface = mount.New("")
+	nm.Exec = mount.NewOsExec()
+	return nm
+}
+
+func withClient(cli *client.Client) Optfunc {
+	return func(n *NodeMounter) {
+		n.client = cli
 	}
+}
+
+func withNodeID(nodeID string) Optfunc {
+	return func(n *NodeMounter) {
+		n.nodeID = nodeID
+	}
+}
+
+func withReqTransition(req *request.Transition) Optfunc {
+	return func(n *NodeMounter) {
+		n.req = req
+	}
+}
+
+func newNodeMounterWithOpts(opts ...Optfunc) *NodeMounter {
+	nm := newNodeMounter()
+	for _, o := range opts {
+		o(nm)
+	}
+	return nm
 }
 
 // GetDeviceName get the device name from the mount path
 func (m *NodeMounter) GetDeviceName(mountPath string) (string, int, error) {
 	return mount.GetDeviceNameFromMount(m, mountPath)
+}
+
+func doesVolumeExist(volID string, cli *client.Client) (*jv.JivaVolume, error) {
+	volID = utils.StripName(volID)
+	if err := cli.Set(); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	instance, err := cli.GetJivaVolume(volID)
+	if err != nil && errors.IsNotFound(err) {
+		return nil, status.Error(codes.NotFound, err.Error())
+	} else if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	return instance, nil
+}
+
+func waitForVolumeToBeReady(volID string, cli *client.Client) (*jv.JivaVolume, error) {
+	var retry int
+	var sleepInterval time.Duration = 0
+	for {
+		time.Sleep(sleepInterval * time.Second)
+		instance, err := doesVolumeExist(volID, cli)
+		if err != nil {
+			return nil, err
+		}
+
+		retry++
+		if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
+			return instance, nil
+		} else if retry <= MaxRetryCount {
+			sleepInterval = 5
+			if instance.Status.Status == "RO" {
+				replicaStatus := instance.Status.ReplicaStatuses
+				if len(replicaStatus) != 0 {
+					logrus.Warningf("Volume is in RO mode: replica status: {%+v}", replicaStatus)
+					continue
+				}
+				logrus.Warningf("Volume is not ready: replicas may not be connected")
+				continue
+			}
+			logrus.Warningf("Volume is not ready: volume status is %s", instance.Status.Status)
+			continue
+		} else {
+			break
+		}
+	}
+	return nil, fmt.Errorf("Max retry count exceeded, volume is not ready")
+}
+
+func waitForVolumeToBeReachable(targetPortal string) error {
+	var (
+		retries int
+		err     error
+		conn    net.Conn
+	)
+
+	for {
+		// Create a connection to test if the iSCSI Portal is reachable,
+		if conn, err = net.Dial("tcp", targetPortal); err == nil {
+			conn.Close()
+			logrus.Debugf("Target {%v} is reachable to create connections", targetPortal)
+			return nil
+		}
+		// wait until the iSCSI targetPortal is reachable
+		// There is no pointn of triggering iSCSIadm login commands
+		// until the portal is reachable
+		time.Sleep(2 * time.Second)
+		retries++
+		if retries >= MaxRetryCount {
+			// Let the caller function decide further if the volume is
+			// not reachable even after 12 seconds ( This number was arrived at
+			// based on the kubelets retrying logic. Kubelet retries to publish
+			// volume after every 14s )
+			return fmt.Errorf(
+				"iSCSI Target not reachable, TargetPortal {%v}, err:%v",
+				targetPortal, err)
+		}
+	}
+}
+
+func listContains(
+	mountPath string, list []mount.MountPoint,
+) (*mount.MountPoint, bool) {
+	for _, info := range list {
+		if info.Path == mountPath {
+			mntInfo := info
+			return &mntInfo, true
+		}
+	}
+	return nil, false
+}
+
+// MonitorMounts makes sure that all the volumes present in the inmemory list
+// with the driver are mounted with the original mount options
+// This function runs a never ending loop therefore should be run as a goroutine
+// Mounted list is fetched from the OS and the state of all the volumes is
+// reverified after every 5 seconds. If the mountpoint is not present in the
+// list or if it has been remounted with a different mount option by the OS, the
+// volume is added to the ReqMountList which is removed as soon as the remount
+// operation on the volume is complete
+// For each remount operation a new goroutine is created, so that if multiple
+// volumes have lost their original state they can all be remounted in parallel
+func (n *NodeMounter) MonitorMounts() {
+	var (
+		err        error
+		csivolList *jv.JivaVolumeList
+		mountList  []mount.MountPoint
+	)
+	ticker := time.NewTicker(MonitorMountRetryTimeout * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if mountList, err = n.List(); err != nil {
+				break
+			}
+
+			// reset the client to avoid caching issue
+			err = n.client.Set()
+			if err != nil {
+				logrus.Warningf("MonitorMounts: failed to set client, err: %v", err)
+				continue
+			}
+
+			if csivolList, err = n.client.ListJivaVolumeWithOpts(map[string]string{
+				"nodeID": n.nodeID,
+			}); err != nil {
+				break
+			}
+			for _, vol := range csivolList.Items {
+				// ignore remount, since volume must be initializing
+				if vol.Spec.MountInfo.StagingPath == "" ||
+					vol.Spec.MountInfo.TargetPath == "" {
+					continue
+				}
+				// Search the volume in the list of mounted volumes at the node
+				// retrieved above
+				stagingMountPoint, stagingPathExists := listContains(
+					vol.Spec.MountInfo.StagingPath, mountList,
+				)
+
+				_, targetPathExists := listContains(
+					vol.Spec.MountInfo.TargetPath, mountList,
+				)
+
+				// If the volume is present in the list verify its state
+				// If stagingPath is in rw then TargetPath will also be in rw
+				// mode
+				if stagingPathExists && targetPathExists && verifyMountOpts(stagingMountPoint.Opts, "rw") {
+					// Continue with remaining volumes since this volume looks
+					// to be in good shape
+					continue
+				}
+
+				csivol := vol
+				go n.remount(csivol, stagingPathExists, targetPathExists)
+			}
+		}
+	}
+}
+
+func verifyMountOpts(opts []string, desiredOpt string) bool {
+	for _, opt := range opts {
+		if opt == desiredOpt {
+			return true
+		}
+	}
+	return false
+}
+
+func (n *NodeMounter) remount(vol jv.JivaVolume, stagingPathExists, targetPathExists bool) {
+	ok := n.req.Insert(vol.Name, "Remount")
+	if !ok {
+		logrus.Warningf("MonitorMounts: operation %v is in progress", n.req.GetOperation(vol.Name))
+		return
+	}
+
+	logrus.Infof("Remounting vol: %s at %s and %s",
+		vol.Name, vol.Spec.MountInfo.StagingPath,
+		vol.Spec.MountInfo.TargetPath)
+	defer func() {
+		n.req.Delete(vol.Name)
+	}()
+
+	if err := n.remountVolume(
+		stagingPathExists, targetPathExists,
+		&vol,
+	); err != nil {
+		logrus.Errorf(
+			"Remount failed for vol: %s : err: %v",
+			vol.Name, err,
+		)
+	} else {
+		logrus.Infof(
+			"Remount successful for vol: %s",
+			vol.Name,
+		)
+	}
+}
+
+// remountVolume unmounts the volume if it is already mounted in an undesired
+// state and then tries to mount again. If it is not mounted the volume, first
+// the disk will be attached via iSCSI login and then it will be mounted
+func (n *NodeMounter) remountVolume(
+	stagingPathExists bool, targetPathExists bool,
+	vol *jv.JivaVolume,
+) (err error) {
+	options := []string{"rw"}
+	// Wait until it is possible to change the state of mountpoint or when
+	// login to volume is possible
+	_, err = waitForVolumeToBeReady(vol.Name, n.client)
+	if err != nil {
+		return
+	}
+
+	err = waitForVolumeToBeReachable(fmt.Sprintf("%v:%v", vol.Spec.ISCSISpec.TargetIP,
+		vol.Spec.ISCSISpec.TargetPort))
+	if err != nil {
+		return
+	}
+
+	if stagingPathExists {
+		n.Unmount(vol.Spec.MountInfo.StagingPath)
+	}
+
+	if targetPathExists {
+		n.Unmount(vol.Spec.MountInfo.TargetPath)
+	}
+
+	// Unmount and mount operation is performed instead of just remount since
+	// the remount option didn't give the desired results
+	if err = n.Mount(vol.Spec.MountInfo.DevicePath,
+		vol.Spec.MountInfo.StagingPath, "", options,
+	); err != nil {
+		return
+	}
+
+	options = []string{"bind"}
+	err = n.Mount(vol.Spec.MountInfo.StagingPath,
+		vol.Spec.MountInfo.TargetPath, "", options)
+	return
 }
