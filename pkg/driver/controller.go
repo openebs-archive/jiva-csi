@@ -70,7 +70,7 @@ func (cs *controller) CreateVolume(
 
 	// set client each time to avoid caching issue
 	if err := cs.client.Set(); err != nil {
-		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: {%v}", err)
 	}
 
 	if err := cs.client.CreateJivaVolume(req); err != nil {
@@ -94,17 +94,17 @@ func (cs *controller) DeleteVolume(
 	if volID == "" {
 		return nil, status.Error(
 			codes.InvalidArgument,
-			"failed to validate volume create request: missing volume name",
+			"Failed to validate volume create request: missing volume name",
 		)
 	}
 	volID = strings.ToLower(volID)
 	// set client each time to avoid caching issue
 	if err := cs.client.Set(); err != nil {
-		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: {%v}", err)
 	}
 
 	if err := cs.client.DeleteJivaVolume(volID); err != nil {
-		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to delete volume {%v}, err: %v", req.VolumeId, err)
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to delete volume {%v}, err: {%v}", req.VolumeId, err)
 	}
 
 	logrus.Infof("DeleteVolume: volume {%s} is deleted", req.VolumeId)
@@ -133,7 +133,7 @@ func (cs *controller) ValidateVolumeCapabilities(
 
 	// set client each time to avoid caching issue
 	if err := cs.client.Set(); err != nil {
-		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: {%v}", err)
 	}
 
 	if _, err := cs.client.GetJivaVolume(volumeID); err != nil {
@@ -316,7 +316,7 @@ func (cs *controller) validateVolumeCreateReq(req *csi.CreateVolumeRequest) erro
 	if req.GetName() == "" {
 		return status.Error(
 			codes.InvalidArgument,
-			"failed to validate volume create request: missing volume name",
+			"Failed to validate volume create request: missing volume name",
 		)
 	}
 
@@ -324,14 +324,14 @@ func (cs *controller) validateVolumeCreateReq(req *csi.CreateVolumeRequest) erro
 	if volCapabilities == nil {
 		return status.Error(
 			codes.InvalidArgument,
-			"failed to get volume capabilities: missing volume capabilities",
+			"Failed to get volume capabilities: missing volume capabilities",
 		)
 	}
 
 	if !isValidVolumeCapabilities(volCapabilities) {
 		return status.Error(
 			codes.InvalidArgument,
-			"failed to validate volume capabilities")
+			"Failed to validate volume capabilities")
 	}
 
 	return nil

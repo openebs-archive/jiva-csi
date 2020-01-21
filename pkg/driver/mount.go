@@ -120,19 +120,19 @@ func waitForVolumeToBeReady(volID string, cli *client.Client) (*jv.JivaVolume, e
 			if instance.Status.Status == "RO" {
 				replicaStatus := instance.Status.ReplicaStatuses
 				if len(replicaStatus) != 0 {
-					logrus.Warningf("Volume {%v} is in RO mode: replica status: {%+v}", volID, replicaStatus)
+					logrus.Warningf("Volume: {%v} is in RO mode: replica status: {%+v}", volID, replicaStatus)
 					continue
 				}
-				logrus.Warningf("Volume {%v} is not ready: replicas may not be connected", volID)
+				logrus.Warningf("Volume: {%v} is not ready: replicas may not be connected", volID)
 				continue
 			}
-			logrus.Warningf("Volume {%v} is not ready: volume status is %s", volID, instance.Status.Status)
+			logrus.Warningf("Volume: {%v} is not ready: volume status is {%s}", volID, instance.Status.Status)
 			continue
 		} else {
 			break
 		}
 	}
-	return nil, fmt.Errorf("Max retry count exceeded, volume {%v} is not ready", volID)
+	return nil, fmt.Errorf("Max retry count exceeded, volume: {%v} is not ready", volID)
 }
 
 func waitForVolumeToBeReachable(targetPortal string) error {
@@ -146,7 +146,7 @@ func waitForVolumeToBeReachable(targetPortal string) error {
 		// Create a connection to test if the iSCSI Portal is reachable,
 		if conn, err = net.Dial("tcp", targetPortal); err == nil {
 			conn.Close()
-			logrus.Debugf("Target {%v} is reachable to create connections", targetPortal)
+			logrus.Debugf("Target: {%v} is reachable to create connections", targetPortal)
 			return nil
 		}
 		// wait until the iSCSI targetPortal is reachable
@@ -160,7 +160,7 @@ func waitForVolumeToBeReachable(targetPortal string) error {
 			// based on the kubelets retrying logic. Kubelet retries to publish
 			// volume after every 14s )
 			return fmt.Errorf(
-				"iSCSI Target not reachable, TargetPortal {%v}, err:%v",
+				"iSCSI Target not reachable, TargetPortal: {%v}, err: {%v}",
 				targetPortal, err)
 		}
 	}
@@ -200,21 +200,21 @@ func (n *NodeMounter) MonitorMounts() {
 		select {
 		case <-ticker.C:
 			if mountList, err = n.List(); err != nil {
-				logrus.Debugf("MonitorMounts: failed to get list of mount paths, err: %v", err)
+				logrus.Debugf("MonitorMounts: failed to get list of mount paths, err: {%v}", err)
 				break
 			}
 
 			// reset the client to avoid caching issue
 			err = n.client.Set()
 			if err != nil {
-				logrus.Warningf("MonitorMounts: failed to set client, err: %v", err)
+				logrus.Warningf("MonitorMounts: failed to set client, err: {%v}", err)
 				continue
 			}
 
 			if csivolList, err = n.client.ListJivaVolumeWithOpts(map[string]string{
 				"nodeID": n.nodeID,
 			}); err != nil {
-				logrus.Debugf("MonitorMounts: failed to get list of jiva volumes attached to this node, err: %v", err)
+				logrus.Debugf("MonitorMounts: failed to get list of jiva volumes attached to this node, err: {%v}", err)
 				break
 			}
 			for _, vol := range csivolList.Items {
@@ -265,10 +265,11 @@ func (n *NodeMounter) remount(vol jv.JivaVolume, stagingPathExists, targetPathEx
 		return
 	}
 
-	logrus.Infof("Remounting volume: {%s} at\nStagingPath: %s\nTargetPath: %s",
+	logrus.Infof("Remount: mount volume {%s} at StagingPath: {%s}, TargetPath: {%s}",
 		vol.Name, vol.Spec.MountInfo.StagingPath,
 		vol.Spec.MountInfo.TargetPath)
 	defer func() {
+		logrus.Infof("Remount: mount operation of volume: {%s} is finished", vol.Name)
 		n.req.Delete(vol.Name)
 	}()
 
@@ -277,12 +278,12 @@ func (n *NodeMounter) remount(vol jv.JivaVolume, stagingPathExists, targetPathEx
 		&vol,
 	); err != nil {
 		logrus.Errorf(
-			"Remount failed for vol: %s : err: %v",
+			"Remount: mount failed for volume: {%s}, err: {%v}",
 			vol.Name, err,
 		)
 	} else {
 		logrus.Infof(
-			"Remount successful for vol: %s",
+			"Remount: mount successful for volume: {%s}",
 			vol.Name,
 		)
 	}

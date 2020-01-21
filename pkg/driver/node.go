@@ -165,19 +165,19 @@ func (ns *node) NodeStageVolume(
 	if err != nil {
 		return nil, err
 	}
-	logrus.Infof("NodeStageVolume: start volume: {%q} operation", reqParam.volumeID)
+
+	logrus.Infof("NodeStageVolume: start staging volume: {%q}", reqParam.volumeID)
 	if ok := ns.VolumeTransition.Insert(reqParam.volumeID, "NodeStage"); !ok {
-		msg := fmt.Sprintf("%s operation on this volume=%q is already in progress", ns.VolumeTransition.GetOperation(reqParam.volumeID), reqParam.volumeID)
+		msg := fmt.Sprintf("%s operation on volume: {%v} is already in progress", ns.VolumeTransition.GetOperation(reqParam.volumeID), reqParam.volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 	defer func() {
-		logrus.Infof("NodeStageVolume: volume: {%q} operation finished", reqParam.volumeID)
+		logrus.Infof("NodeStageVolume: staging of volume: {%q} is finished", reqParam.volumeID)
 		ns.VolumeTransition.Delete(reqParam.volumeID)
 	}()
 
 	// Check if volume is ready to serve IOs,
 	// info is fetched from the JivaVolume CR
-	logrus.Debug("NodeStageVolume: wait for the volume to be ready")
 	instance, err := waitForVolumeToBeReady(reqParam.volumeID, ns.client)
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
@@ -190,7 +190,6 @@ func (ns *node) NodeStageVolume(
 
 	// A temporary TCP connection is made to the volume to check if its
 	// reachable
-	logrus.Debug("NodeStageVolume: wait for the iscsi target to be ready")
 	if err := waitForVolumeToBeReachable(
 		fmt.Sprintf("%v:%v", instance.Spec.ISCSISpec.TargetIP,
 			instance.Spec.ISCSISpec.TargetPort),
@@ -201,7 +200,7 @@ func (ns *node) NodeStageVolume(
 
 	devicePath, err := ns.attachDisk(instance)
 	if err != nil {
-		logrus.Errorf("NodeStageVolume: failed to attachDisk for volume %v, err: %v", reqParam.volumeID, err)
+		logrus.Errorf("NodeStageVolume: failed to attachDisk for volume: {%v}, err: {%v}", reqParam.volumeID, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -220,11 +219,11 @@ func (ns *node) NodeStageVolume(
 	}
 
 	if err := os.MkdirAll(reqParam.stagingPath, 0750); err != nil {
-		logrus.Errorf("failed to mkdir %s, error: %v", reqParam.stagingPath, err)
+		logrus.Errorf("Failed to mkdir %s, error: %v", reqParam.stagingPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	logrus.Info("NodeStageVolume: start format and mount operation")
+	logrus.Infof("NodeStageVolume: start format and mount operation on volume: {%v}", reqParam.volumeID)
 	if err := ns.formatAndMount(req, instance.Spec.MountInfo.DevicePath); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -258,7 +257,7 @@ func (ns *node) NodeUnstageVolume(
 
 	volID := req.GetVolumeId()
 	if volID == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeUnstageVolume Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume ID must be provided")
 	}
 
 	target := req.GetStagingTargetPath()
@@ -266,13 +265,14 @@ func (ns *node) NodeUnstageVolume(
 		return nil, status.Error(codes.InvalidArgument, "Staging target not provided")
 	}
 
+	logrus.Infof("NodeUnstageVolume: start unstaging volume: {%q}", volID)
 	if ok := ns.VolumeTransition.Insert(volID, "NodeUnstageVolume"); !ok {
-		msg := fmt.Sprintf("%s operation on this volume=%q is already in progress", ns.VolumeTransition.GetOperation(volID), volID)
+		msg := fmt.Sprintf("%s operation on volume: {%v} is already in progress", ns.VolumeTransition.GetOperation(volID), volID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
 	defer func() {
-		logrus.Infof("NodeUnstageVolume: volume: {%q} operation finished", volID)
+		logrus.Infof("NodeUnstageVolume: unstaging of volume: {%q} is finished", volID)
 		ns.VolumeTransition.Delete(volID)
 	}()
 
@@ -281,7 +281,7 @@ func (ns *node) NodeUnstageVolume(
 	// returns the device name, reference count, and error code
 	dev, refCount, err := ns.mounter.GetDeviceName(target)
 	if err != nil {
-		msg := fmt.Sprintf("failed to check if volume is mounted: %v", err)
+		msg := fmt.Sprintf("Failed to check if volume is mounted, err: {%v}", err)
 		return nil, status.Error(codes.Internal, msg)
 	}
 
@@ -308,14 +308,15 @@ func (ns *node) NodeUnstageVolume(
 		return nil, err
 	}
 
-	logrus.Infof("NodeUnstageVolume: disconnect from iscsi target: %s", target)
+	tgtIP := instance.Spec.ISCSISpec.TargetIP
+	logrus.Infof("NodeUnstageVolume: disconnect from iscsi target: {%s}", tgtIP)
 	if err := iscsi.Disconnect(instance.Spec.ISCSISpec.Iqn, []string{fmt.Sprintf("%v:%v",
-		instance.Spec.ISCSISpec.TargetIP, instance.Spec.ISCSISpec.TargetPort)}); err != nil {
+		tgtIP, instance.Spec.ISCSISpec.TargetPort)}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	if err := os.RemoveAll(instance.Spec.MountInfo.StagingPath); err != nil {
-		logrus.Errorf("Failed to remove mount path, err: %v", err)
+		logrus.Errorf("Failed to remove mount path, err: {%v}", err)
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
@@ -326,7 +327,7 @@ func (ns *node) NodeUnstageVolume(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	logrus.Infof("NodeUnstageVolume: detaching device %v is finished", instance.Spec.MountInfo.DevicePath)
+	logrus.Infof("NodeUnstageVolume: detaching device %v", instance.Spec.MountInfo.DevicePath)
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
@@ -337,13 +338,13 @@ func (ns *node) formatAndMount(req *csi.NodeStageVolumeRequest, devicePath strin
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(mntPath)
 	if err != nil && !os.IsNotExist(err) {
 		if err := os.MkdirAll(mntPath, 0750); err != nil {
-			logrus.Errorf("failed to mkdir %s, error", mntPath)
+			logrus.Errorf("Failed to mkdir %s, err: {%v}", mntPath, err)
 			return err
 		}
 	}
 
 	if !notMnt {
-		logrus.Infof("Volume %s has been mounted already at %v", req.GetVolumeId(), mntPath)
+		logrus.Infof("Volume: {%s} has been mounted already at {%v}", req.GetVolumeId(), mntPath)
 		return nil
 	}
 
@@ -355,7 +356,7 @@ func (ns *node) formatAndMount(req *csi.NodeStageVolumeRequest, devicePath strin
 	err = ns.mounter.FormatAndMount(devicePath, mntPath, fsType, options)
 	if err != nil {
 		logrus.Errorf(
-			"Failed to mount iscsi volume %s [%s, %s] to %s, error %v",
+			"Failed to mount iscsi volume {%s [%s, %s]} to {%s}, error {%v}",
 			req.GetVolumeId(), devicePath, fsType, mntPath, err,
 		)
 		return err
@@ -391,14 +392,14 @@ func (ns *node) NodePublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Volume capability not supported")
 	}
 
-	logrus.Infof("NodePublishVolume: start volume: {%q} operation", volumeID)
+	logrus.Infof("NodePublishVolume: start publishing volume: {%q}", volumeID)
 	if ok := ns.VolumeTransition.Insert(volumeID, "NodePublishVolume"); !ok {
-		msg := fmt.Sprintf("%s operation on this volume=%q is already in progress", ns.VolumeTransition.GetOperation(volumeID), volumeID)
+		msg := fmt.Sprintf("%s operation on volume: {%q} is already in progress", ns.VolumeTransition.GetOperation(volumeID), volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
 	defer func() {
-		logrus.Infof("NodePublishVolume: volume: {%q} operation finished", volumeID)
+		logrus.Infof("NodePublishVolume: publishing of volume: {%v} is finished", volumeID)
 		ns.VolumeTransition.Delete(volumeID)
 	}()
 
@@ -452,7 +453,7 @@ func (ns *node) nodePublishVolumeForFileSystem(req *csi.NodePublishVolumeRequest
 		}
 	}
 
-	logrus.Infof("NodePublishVolume: creating dir %s", target)
+	logrus.Infof("NodePublishVolume: creating dir: {%s}", target)
 	if err := os.MkdirAll(target, 0000); err != nil {
 		return status.Errorf(codes.Internal, "Could not create dir {%q}, err: %v", target, err)
 	}
@@ -468,7 +469,7 @@ func (ns *node) nodePublishVolumeForFileSystem(req *csi.NodePublishVolumeRequest
 		fsType = defaultFsType
 	}
 
-	logrus.Infof("NodePublishVolume: mounting %s at %s with option %s as fstype %s", source, target, mountOptions, fsType)
+	logrus.Infof("NodePublishVolume: start mounting: source: {%s} at target: {%s} with options: {%s} and fstype: {%s}", source, target, mountOptions, fsType)
 	if err := ns.mounter.Mount(source, target, fsType, mountOptions); err != nil {
 		if removeErr := os.Remove(target); removeErr != nil {
 			return status.Errorf(codes.Internal, "Could not remove mount target %q: %v", target, err)
@@ -499,7 +500,7 @@ func (ns *node) NodeUnpublishVolume(
 	}
 
 	if ok := ns.VolumeTransition.Insert(volumeID, "NodeUnpublishVolume"); !ok {
-		msg := fmt.Sprintf("%s operation on this volume=%q is already in progress", ns.VolumeTransition.GetOperation(volumeID), volumeID)
+		msg := fmt.Sprintf("%s operation on volume: {%v} is already in progress", ns.VolumeTransition.GetOperation(volumeID), volumeID)
 		return nil, status.Error(codes.Aborted, msg)
 	}
 
@@ -529,7 +530,7 @@ func (ns *node) isAlreadyMounted(volID, path string) error {
 	currentMounts := map[string]bool{}
 	mountList, err := ns.mounter.List()
 	if err != nil {
-		return fmt.Errorf("Failed to list mount paths")
+		return fmt.Errorf("Failed to list mount paths, err: {%v}", err)
 	}
 
 	for _, mntInfo := range mountList {
@@ -546,7 +547,7 @@ func (ns *node) isAlreadyMounted(volID, path string) error {
 		if mounted, ok := currentMounts[path]; ok && mounted {
 			return nil
 		}
-		return fmt.Errorf("Volume is already mounted at more than one place: {%v}", currentMounts)
+		return fmt.Errorf("Volume {%v} is already mounted at more than one place: {%v}", volID, currentMounts)
 	}
 
 	return nil
@@ -555,7 +556,7 @@ func (ns *node) isAlreadyMounted(volID, path string) error {
 func (ns *node) unmount(volumeID, target string) error {
 	notMnt, err := ns.mounter.IsLikelyNotMountPoint(target)
 	if (err == nil && notMnt) || os.IsNotExist(err) {
-		logrus.Warningf("Volume: %s is not mounted, err: %v", target, err)
+		logrus.Warningf("Volume: {%s} is not mounted, err: %v", target, err)
 		return nil
 	}
 
@@ -632,26 +633,26 @@ func (ns *node) NodeGetVolumeStats(
 
 	volumeID := req.GetVolumeId()
 	if volumeID == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeGetVolumeStats Volume ID must be provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume ID must be provided")
 	}
 
 	volumePath := req.GetVolumePath()
 	if volumePath == "" {
-		return nil, status.Error(codes.InvalidArgument, "NodeGetVolumeStats Volume Path must be provided")
+		return nil, status.Error(codes.InvalidArgument, "Volume Path must be provided")
 	}
 
 	mounted, err := ns.mounter.ExistsPath(volumePath)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to check if volume path %q is mounted: %s", volumePath, err)
+		return nil, status.Errorf(codes.Internal, "Failed to check if volume path {%q} is mounted: %s", volumePath, err)
 	}
 
 	if !mounted {
-		return nil, status.Errorf(codes.NotFound, "volume path %q is not mounted", volumePath)
+		return nil, status.Errorf(codes.NotFound, "Volume path {%q} is not mounted", volumePath)
 	}
 
 	stats, err := getStatistics(volumePath)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to retrieve capacity statistics for volume path %q: %s", volumePath, err)
+		return nil, status.Errorf(codes.Internal, "Failed to retrieve capacity statistics for volume path {%q}: {%s}", volumePath, err)
 	}
 
 	return &csi.NodeGetVolumeStatsResponse{
