@@ -125,11 +125,12 @@ func run(config *config.Config) {
 
 	logrus.Infof("%s - %s", version.Version, version.Commit)
 	logrus.Infof(
-		"DriverName: %s Plugin: %s EndPoint: %s NodeID: %s",
+		"DriverName: %s Plugin: %s EndPoint: %s NodeID: %s, MaxRetryCount: %v",
 		config.DriverName,
 		config.PluginType,
 		config.Endpoint,
 		config.NodeID,
+		driver.MaxRetryCount,
 	)
 
 	if config.PluginType == "node" && enableISCSIDebug {

@@ -1,6 +1,7 @@
 #!/bin/bash
 
 #set -ex
+test_repo="utkarshmani1997"
 
 function initializeTestEnv() {
 	echo "===================== Initialize test env ======================"
@@ -13,6 +14,8 @@ function initializeTestEnv() {
 }
 EOT
   sudo rm -rf /tmp/csi.sock
+	sudo rm -rf /tmp/csi-mount
+	sudo rm -rf /tmp/csi-staging
 }
 
 
@@ -75,10 +78,10 @@ function waitForComponent() {
 
 function initializeCSISanitySuite() {
 	echo "=============== Initialize CSI Sanity test suite ==============="
-	CSI_TEST_REPO=https://github.com/kubernetes-csi/csi-test.git
-	CSI_REPO_PATH="$GOPATH/src/github.com/kubernetes-csi/csi-test"
+	CSI_TEST_REPO=https://github.com/$test_repo/csi-test.git
+	CSI_REPO_PATH="$GOPATH/src/github.com/$test_repo/csi-test"
 	if [ ! -d "$CSI_REPO_PATH" ] ; then
-		git clone $CSI_TEST_REPO $CSI_REPO_PATH
+		git clone -b add-volume-param $CSI_TEST_REPO $CSI_REPO_PATH
 	else
 		cd "$CSI_REPO_PATH"
 		git pull $CSI_REPO_PATH

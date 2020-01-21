@@ -24,6 +24,7 @@ require (
 )
 
 replace (
+	github.com/openebs/jiva-operator => github.com/utkarshmani1997/jiva-operator-1 v0.0.0-20200112065051-83d3118bdb57
 	k8s.io/api => k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190620085554-14e95df34f1f
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
