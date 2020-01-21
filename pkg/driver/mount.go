@@ -120,19 +120,19 @@ func waitForVolumeToBeReady(volID string, cli *client.Client) (*jv.JivaVolume, e
 			if instance.Status.Status == "RO" {
 				replicaStatus := instance.Status.ReplicaStatuses
 				if len(replicaStatus) != 0 {
-					logrus.Warningf("Volume is in RO mode: replica status: {%+v}", replicaStatus)
+					logrus.Warningf("Volume {%v} is in RO mode: replica status: {%+v}", volID, replicaStatus)
 					continue
 				}
-				logrus.Warningf("Volume is not ready: replicas may not be connected")
+				logrus.Warningf("Volume {%v} is not ready: replicas may not be connected", volID)
 				continue
 			}
-			logrus.Warningf("Volume is not ready: volume status is %s", instance.Status.Status)
+			logrus.Warningf("Volume {%v} is not ready: volume status is %s", volID, instance.Status.Status)
 			continue
 		} else {
 			break
 		}
 	}
-	return nil, fmt.Errorf("Max retry count exceeded, volume is not ready")
+	return nil, fmt.Errorf("Max retry count exceeded, volume {%v} is not ready", volID)
 }
 
 func waitForVolumeToBeReachable(targetPortal string) error {
@@ -189,6 +189,7 @@ func listContains(
 // For each remount operation a new goroutine is created, so that if multiple
 // volumes have lost their original state they can all be remounted in parallel
 func (n *NodeMounter) MonitorMounts() {
+	logrus.Infof("Starting MonitorMounts goroutine")
 	var (
 		err        error
 		csivolList *jv.JivaVolumeList
@@ -199,6 +200,7 @@ func (n *NodeMounter) MonitorMounts() {
 		select {
 		case <-ticker.C:
 			if mountList, err = n.List(); err != nil {
+				logrus.Debugf("MonitorMounts: failed to get list of mount paths, err: %v", err)
 				break
 			}
 
@@ -212,6 +214,7 @@ func (n *NodeMounter) MonitorMounts() {
 			if csivolList, err = n.client.ListJivaVolumeWithOpts(map[string]string{
 				"nodeID": n.nodeID,
 			}); err != nil {
+				logrus.Debugf("MonitorMounts: failed to get list of jiva volumes attached to this node, err: %v", err)
 				break
 			}
 			for _, vol := range csivolList.Items {
@@ -258,11 +261,11 @@ func verifyMountOpts(opts []string, desiredOpt string) bool {
 func (n *NodeMounter) remount(vol jv.JivaVolume, stagingPathExists, targetPathExists bool) {
 	ok := n.req.Insert(vol.Name, "Remount")
 	if !ok {
-		logrus.Warningf("MonitorMounts: operation %v is in progress", n.req.GetOperation(vol.Name))
+		logrus.Warningf("Remount: operation {%v} is already in progress on volume {%v}", n.req.GetOperation(vol.Name), vol.Name)
 		return
 	}
 
-	logrus.Infof("Remounting vol: %s at %s and %s",
+	logrus.Infof("Remounting volume: {%s} at\nStagingPath: %s\nTargetPath: %s",
 		vol.Name, vol.Spec.MountInfo.StagingPath,
 		vol.Spec.MountInfo.TargetPath)
 	defer func() {

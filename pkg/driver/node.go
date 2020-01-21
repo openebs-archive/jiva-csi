@@ -18,10 +18,8 @@ package driver
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/kubernetes-csi/csi-lib-iscsi/iscsi"
@@ -114,70 +112,6 @@ func (ns *node) attachDisk(instance *jv.JivaVolume) (string, error) {
 		return "", fmt.Errorf("connect reported success, but no path returned")
 	}
 	return devicePath, err
-}
-
-func (ns *node) waitForVolumeToBeReady(volID string) (*jv.JivaVolume, error) {
-	var retry int
-	var sleepInterval time.Duration = 0
-	for {
-		time.Sleep(sleepInterval * time.Second)
-		instance, err := doesVolumeExist(volID, ns.client)
-		if err != nil {
-			return nil, err
-		}
-
-		retry++
-		if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
-			return instance, nil
-		} else if retry <= MaxRetryCount {
-			sleepInterval = 5
-			if instance.Status.Status == "RO" {
-				replicaStatus := instance.Status.ReplicaStatuses
-				if len(replicaStatus) != 0 {
-					logrus.Warningf("Volume is in RO mode: replica status: {%+v}", replicaStatus)
-					continue
-				}
-				logrus.Warningf("Volume is not ready: replicas may not be connected")
-				continue
-			}
-			logrus.Warningf("Volume is not ready: volume status is %s", instance.Status.Status)
-			continue
-		} else {
-			break
-		}
-	}
-	return nil, fmt.Errorf("Max retry count exceeded, volume is not ready")
-}
-
-func (ns *node) waitForVolumeToBeReachable(targetPortal string) error {
-	var (
-		retries int
-		err     error
-		conn    net.Conn
-	)
-
-	for {
-		// Create a connection to test if the iSCSI Portal is reachable,
-		if conn, err = net.Dial("tcp", targetPortal); err == nil {
-			conn.Close()
-			logrus.Debugf("Target {%v} is reachable to create connections", targetPortal)
-			return nil
-		}
-		// wait until the iSCSI targetPortal is reachable
-		// There is no pointn of triggering iSCSIadm login commands
-		// until the portal is reachable
-		time.Sleep(2 * time.Second)
-		retries++
-		if retries >= MaxRetryCount {
-			// Let the caller function decide further if the volume is
-			// not reachable even after 12 seconds ( This number was arrived at
-			// based on the kubelets retrying logic. Kubelet retries to publish
-			// volume after every 14s )
-			return fmt.Errorf(
-				"iSCSI Target not reachable, TargetPortal {%v}, err:%v",
-				targetPortal, err)
-		}
-	}
 }
 
 func (ns *node) validateStagingReq(req *csi.NodeStageVolumeRequest) (nodeStageRequest, error) {
