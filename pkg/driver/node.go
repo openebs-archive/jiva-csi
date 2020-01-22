@@ -397,7 +397,7 @@ func (ns *node) NodePublishVolume(
 	}
 
 	// JivaVolume CR may be updated by jiva-operator
-	instance, err := ns.client.GetJivaVolume(req.VolumeId)
+	instance, err := ns.doesVolumeExist(volumeID)
 	if err != nil {
 		return nil, err
 	}

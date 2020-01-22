@@ -21,6 +21,54 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+)
+
+const (
+	defaultReplicaSC = "openebs-hostpath"
+)
+
+var (
+	zero              int64
+	defaultTargetSpec = jv.TargetSpec{
+		ReplicationFactor: 3,
+		AuxResources:      &corev1.ResourceRequirements{},
+		PodTemplateResources: jv.PodTemplateResources{
+			Resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("0"),
+					corev1.ResourceMemory: resource.MustParse("0"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("0"),
+					corev1.ResourceMemory: resource.MustParse("0"),
+				},
+			},
+			Tolerations:       []corev1.Toleration{},
+			NodeSelector:      nil,
+			PriorityClassName: "",
+			Affinity:          &corev1.Affinity{},
+		},
+	}
+	defaultReplicaSpec = jv.ReplicaSpec{
+		PodTemplateResources: jv.PodTemplateResources{
+			Resources: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("0"),
+					corev1.ResourceMemory: resource.MustParse("0"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("0"),
+					corev1.ResourceMemory: resource.MustParse("0"),
+				},
+			},
+			Tolerations:       nil,
+			NodeSelector:      nil,
+			PriorityClassName: "",
+			Affinity:          &corev1.Affinity{},
+		},
+	}
 )
 
 // Jiva wraps the JivaVolume structure
@@ -102,16 +150,89 @@ func HasResourceParameters(req *csi.CreateVolumeRequest) ResourceParameters {
 	}
 }
 
-// WithReplicaStorageClass returns storage class
-func WithReplicaStorageClass(sc string) string {
-	if sc == "" {
-		return "openebs-hostpath"
-	}
-	return sc
-}
-
 // WithSpec defines the Spec field of JivaVolume
 func (j *Jiva) WithSpec(spec jv.JivaVolumeSpec) *Jiva {
 	j.jvObj.Spec = spec
+	return j
+}
+
+// WithPV defines the PV field of JivaVolumeSpec
+func (j *Jiva) WithPV(pvName string) *Jiva {
+	j.jvObj.Spec.PV = pvName
+	return j
+}
+
+// WithCapacity defines the Capacity field of JivaVolumeSpec
+func (j *Jiva) WithCapacity(capacity string) *Jiva {
+	j.jvObj.Spec.Capacity = capacity
+	return j
+}
+
+// WithReplicaSC defines the ReplicaSC field of JivaVolumePolicySpec
+func (j *Jiva) WithReplicaSC(scName string) *Jiva {
+	if scName == "" {
+		scName = defaultReplicaSC
+	}
+	j.jvObj.Spec.Policy.ReplicaSC = scName
+	return j
+}
+
+// WithEnableBufio defines the ReplicaSC field of JivaVolumePolicySpec
+func (j *Jiva) WithEnableBufio(enable bool) *Jiva {
+	j.jvObj.Spec.Policy.EnableBufio = enable
+	return j
+}
+
+// WithAutoScaling defines the ReplicaSC field of JivaVolumePolicySpec
+func (j *Jiva) WithAutoScaling(enable bool) *Jiva {
+	j.jvObj.Spec.Policy.AutoScaling = enable
+	return j
+}
+
+// WithTarget defines the ReplicaSC field of JivaVolumePolicySpec
+func (j *Jiva) WithTarget(target jv.TargetSpec) *Jiva {
+	if target.ReplicationFactor == 0 {
+		target.ReplicationFactor = defaultTargetSpec.ReplicationFactor
+	}
+	if target.AuxResources == nil {
+		target.AuxResources = defaultTargetSpec.AuxResources
+	}
+	if target.Resources == nil {
+		target.Resources = defaultTargetSpec.Resources
+	}
+	if target.Tolerations == nil {
+		target.Tolerations = defaultTargetSpec.Tolerations
+	}
+	if target.Affinity == nil {
+		target.Affinity = defaultTargetSpec.Affinity
+	}
+	if target.NodeSelector == nil {
+		target.NodeSelector = defaultTargetSpec.NodeSelector
+	}
+	if target.PriorityClassName == "" {
+		target.PriorityClassName = defaultTargetSpec.PriorityClassName
+	}
+	j.jvObj.Spec.Policy.Target = target
+	return j
+}
+
+// WithReplica defines the ReplicaSC field of JivaVolumePolicySpec
+func (j *Jiva) WithReplica(replica jv.ReplicaSpec) *Jiva {
+	if replica.Resources == nil {
+		replica.Resources = defaultReplicaSpec.Resources
+	}
+	if replica.Tolerations == nil {
+		replica.Tolerations = defaultReplicaSpec.Tolerations
+	}
+	if replica.Affinity == nil {
+		replica.Affinity = defaultReplicaSpec.Affinity
+	}
+	if replica.NodeSelector == nil {
+		replica.NodeSelector = defaultReplicaSpec.NodeSelector
+	}
+	if replica.PriorityClassName == "" {
+		replica.PriorityClassName = defaultReplicaSpec.PriorityClassName
+	}
+	j.jvObj.Spec.Policy.Replica = replica
 	return j
 }

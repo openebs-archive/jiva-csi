@@ -28,7 +28,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -150,62 +149,13 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	jiva := jivavolume.New().WithKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
 		WithNameAndNamespace(name, ns).
 		WithLabels(getDefaultLabels(name)).
-		WithSpec(jv.JivaVolumeSpec{
-			PV:       name,
-			Capacity: capacity,
-			Policy: &jv.JivaVolumePolicySpec{
-				ReplicaSC: func(sc string) string {
-					if sc == "" {
-						return defaultReplicaSC
-					}
-					return sc
-				}(policy.Spec.ReplicaSC),
-				Replica: jv.ReplicaSpec{
-					PodTemplateResources: jv.PodTemplateResources{
-						Resources: func(req *v1.ResourceRequirements) *v1.ResourceRequirements {
-							if req != nil {
-								return req
-							}
-							return &v1.ResourceRequirements{
-								Requests: v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("0"),
-									v1.ResourceMemory: resource.MustParse("0"),
-								},
-								Limits: v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("0"),
-									v1.ResourceMemory: resource.MustParse("0"),
-								},
-							}
-						}(policy.Spec.Replica.Resources),
-					}},
-
-				Target: jv.TargetSpec{
-					Monitor: false,
-					ReplicationFactor: func(rf int) int {
-						if rf == 0 {
-							return defaultReplicaCount
-						}
-						return rf
-					}(policy.Spec.Target.ReplicationFactor),
-					PodTemplateResources: jv.PodTemplateResources{
-						Resources: func(req *v1.ResourceRequirements) *v1.ResourceRequirements {
-							if req != nil {
-								return req
-							}
-							return &v1.ResourceRequirements{
-								Requests: v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("0"),
-									v1.ResourceMemory: resource.MustParse("0"),
-								},
-								Limits: v1.ResourceList{
-									v1.ResourceCPU:    resource.MustParse("0"),
-									v1.ResourceMemory: resource.MustParse("0"),
-								},
-							}
-						}(policy.Spec.Target.Resources),
-					}},
-			},
-		})
+		WithPV(name).
+		WithCapacity(capacity).
+		WithReplicaSC(policy.Spec.ReplicaSC).
+		WithEnableBufio(policy.Spec.EnableBufio).
+		WithAutoScaling(policy.Spec.AutoScaling).
+		WithTarget(policy.Spec.Target).
+		WithReplica(policy.Spec.Replica)
 
 	if jiva.Errs != nil {
 		return status.Errorf(codes.Internal, "Failed to build JivaVolume CR, err: {%v}", jiva.Errs)
