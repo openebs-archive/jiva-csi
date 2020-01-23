@@ -330,7 +330,7 @@ spec:
             - name: iscsiadm-bin
               mountPath: /sbin/iscsiadm
         - name: liveness-probe
-          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          image: quay.io/k8scsi/livenessprobe:v2.0.0
           args:
           - "--csi-address=/plugin/csi.sock"
           volumeMounts:

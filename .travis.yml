@@ -1,5 +1,5 @@
 language: go
-dist: xenial
+dist: bionic
 sudo: required
 install: true
 services:
@@ -50,7 +50,7 @@ script:
   - kubectl apply -f openebs-operator.yaml
   - kubectl apply -f deploy/
   - cd ${TRAVIS_BUILD_DIR}
-  - kubectl apply -f deploy/jiva-csi-ubuntu-16.04.yaml
+  - kubectl apply -f deploy/jiva-csi.yaml
   - ./ci/ci.sh
 
 after_success:
