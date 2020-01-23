@@ -57,6 +57,11 @@ var SupportedVolumeCapabilityAccessType = []*csi.VolumeCapability_Mount{
 	},
 }
 
+var (
+	httpReqRetryCount    = 5
+	httpReqRetryInterval = 2 * time.Second
+)
+
 // NewController returns a new instance
 // of CSI controller
 func NewController(cli *client.Client) csi.ControllerServer {
@@ -249,8 +254,19 @@ func (cs *controller) ControllerExpandVolume(
 
 	cli := jiva.NewControllerClient(jivaVolume.Spec.ISCSISpec.TargetIP + ":9501")
 	cli.SetTimeout(30 * time.Second)
-	if err := cli.Get("/volumes", &vol); err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to get expand volume info from jiva controller, err: %v", err)
+	retryCount := 0
+	var httpErr error
+	for retryCount < httpReqRetryCount {
+		httpErr = cli.Get("/volumes", &vol)
+		if httpErr == nil {
+			break
+		}
+		time.Sleep(httpReqRetryInterval)
+		retryCount++
+	}
+
+	if httpErr != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to get volume info from jiva controller, err: %v", httpErr)
 	}
 
 	if len(vol.Data) == 0 {
@@ -266,9 +282,18 @@ func (cs *controller) ControllerExpandVolume(
 		Size: capacity,
 	}
 
-	err = cli.Post(vol.Data[0].Actions["resize"], input, nil)
-	if err != nil {
-		return nil, err
+	retryCount = 0
+	for retryCount < httpReqRetryCount {
+		httpErr = cli.Post(vol.Data[0].Actions["resize"], input, nil)
+		if httpErr == nil {
+			break
+		}
+		time.Sleep(httpReqRetryInterval)
+		retryCount++
+	}
+
+	if httpErr != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to post resize request to jiva controller, err: %v", httpErr)
 	}
 
 	// set client each time to avoid caching issue
