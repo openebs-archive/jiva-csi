@@ -7,6 +7,7 @@ function initializeTestEnv() {
 	echo "===================== Initialize test env ======================"
 	# Pull image so that provisioning won't take long time
 	docker pull openebs/jiva:ci
+	docker images | grep openebs/jiva
 	cat <<EOT >> /tmp/parameters.json
 {
         "cas-type": "jiva",
@@ -29,9 +30,9 @@ function dumpLogs() {
 	local POD=$(kubectl get pod -n $NS -l $LABEL -o jsonpath='{range .items[*]}{@.metadata.name}')
 	if [ -z $CONTAINER ];
 	then
-		kubectl logs --tail=50 $POD -n $NS
+		kubectl logs $POD -n $NS
 	else
-		kubectl logs --tail=50 $POD -n $NS -c $CONTAINER
+		kubectl logs $POD -n $NS -c $CONTAINER
 	fi
 }
 
