@@ -38,11 +38,9 @@ import (
 )
 
 const (
-	defaultReplicaCount = 3
-	defaultReplicaSC    = "openebs-hostpath"
-	defaultNS           = "openebs"
-	maxNameLen          = 63
-	defaultSizeBytes    = 5 * helpers.GiB
+	defaultReplicaSC = "openebs-hostpath"
+	defaultNS        = "openebs"
+	defaultSizeBytes = 5 * helpers.GiB
 )
 
 // Client is the wrapper over the k8s client that will be used by
@@ -121,6 +119,14 @@ func getDefaultLabels(pv string) map[string]string {
 	}
 }
 
+func getdefaultAnnotations(policy string) map[string]string {
+	annotations := map[string]string{}
+	if policy != "" {
+		annotations["openebs.io/volume-policy"] = policy
+	}
+	return annotations
+}
+
 // CreateJivaVolume check whether JivaVolume CR already exists and creates one
 // if it doesn't exist.
 func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
@@ -130,11 +136,6 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	ns, ok := req.GetParameters()["namespace"]
 	if !ok {
 		ns = defaultNS
-	}
-	policy := &jv.JivaVolumePolicy{}
-	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: policyName, Namespace: defaultNS}, policy)
-	if err != nil && !errors.IsNotFound(err) {
-		status.Errorf(codes.Internal, "failed to get JivaVolumePolicy CR, err: %v", err)
 	}
 	if req.GetCapacityRange() == nil {
 		logrus.Warningf("CreateVolume: capacity range is nil, provisioning with default size: {%v (bytes)}", defaultSizeBytes)
@@ -148,14 +149,10 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	capacity := fmt.Sprintf("%dGi", volSizeGiB)
 	jiva := jivavolume.New().WithKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
 		WithNameAndNamespace(name, ns).
+		WithAnnotations(getdefaultAnnotations(policyName)).
 		WithLabels(getDefaultLabels(name)).
 		WithPV(name).
-		WithCapacity(capacity).
-		WithReplicaSC(policy.Spec.ReplicaSC).
-		WithEnableBufio(policy.Spec.EnableBufio).
-		WithAutoScaling(policy.Spec.AutoScaling).
-		WithTarget(policy.Spec.Target).
-		WithReplica(policy.Spec.Replica)
+		WithCapacity(capacity)
 
 	if jiva.Errs != nil {
 		return status.Errorf(codes.Internal, "Failed to build JivaVolume CR, err: {%v}", jiva.Errs)
@@ -163,7 +160,7 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 
 	obj := jiva.Instance()
 	objExists := &jv.JivaVolume{}
-	err = cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, objExists)
+	err := cl.client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: ns}, objExists)
 	if err != nil && errors.IsNotFound(err) {
 		logrus.Infof("Creating a new JivaVolume CR {name: %v, namespace: %v}", name, ns)
 		err = cl.client.Create(context.TODO(), obj)

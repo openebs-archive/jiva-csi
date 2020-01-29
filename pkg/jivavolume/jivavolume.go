@@ -135,6 +135,17 @@ func (j *Jiva) WithLabels(labels map[string]string) *Jiva {
 	return j
 }
 
+// WithAnnotations is used to set the annotations in JivaVolume CR
+func (j *Jiva) WithAnnotations(annotations map[string]string) *Jiva {
+	if annotations != nil {
+		j.jvObj.Annotations = annotations
+	} else {
+		j.Errs = append(j.Errs,
+			errors.New("failed to initialize JivaVolume: annotations are missing"))
+	}
+	return j
+}
+
 // ResourceParameters is a function type which return resource values
 type ResourceParameters func(param string) string
 
@@ -150,12 +161,6 @@ func HasResourceParameters(req *csi.CreateVolumeRequest) ResourceParameters {
 	}
 }
 
-// WithSpec defines the Spec field of JivaVolume
-func (j *Jiva) WithSpec(spec jv.JivaVolumeSpec) *Jiva {
-	j.jvObj.Spec = spec
-	return j
-}
-
 // WithPV defines the PV field of JivaVolumeSpec
 func (j *Jiva) WithPV(pvName string) *Jiva {
 	j.jvObj.Spec.PV = pvName
@@ -165,74 +170,5 @@ func (j *Jiva) WithPV(pvName string) *Jiva {
 // WithCapacity defines the Capacity field of JivaVolumeSpec
 func (j *Jiva) WithCapacity(capacity string) *Jiva {
 	j.jvObj.Spec.Capacity = capacity
-	return j
-}
-
-// WithReplicaSC defines the ReplicaSC field of JivaVolumePolicySpec
-func (j *Jiva) WithReplicaSC(scName string) *Jiva {
-	if scName == "" {
-		scName = defaultReplicaSC
-	}
-	j.jvObj.Spec.Policy.ReplicaSC = scName
-	return j
-}
-
-// WithEnableBufio defines the ReplicaSC field of JivaVolumePolicySpec
-func (j *Jiva) WithEnableBufio(enable bool) *Jiva {
-	j.jvObj.Spec.Policy.EnableBufio = enable
-	return j
-}
-
-// WithAutoScaling defines the ReplicaSC field of JivaVolumePolicySpec
-func (j *Jiva) WithAutoScaling(enable bool) *Jiva {
-	j.jvObj.Spec.Policy.AutoScaling = enable
-	return j
-}
-
-// WithTarget defines the ReplicaSC field of JivaVolumePolicySpec
-func (j *Jiva) WithTarget(target jv.TargetSpec) *Jiva {
-	if target.ReplicationFactor == 0 {
-		target.ReplicationFactor = defaultTargetSpec.ReplicationFactor
-	}
-	if target.AuxResources == nil {
-		target.AuxResources = defaultTargetSpec.AuxResources
-	}
-	if target.Resources == nil {
-		target.Resources = defaultTargetSpec.Resources
-	}
-	if target.Tolerations == nil {
-		target.Tolerations = defaultTargetSpec.Tolerations
-	}
-	if target.Affinity == nil {
-		target.Affinity = defaultTargetSpec.Affinity
-	}
-	if target.NodeSelector == nil {
-		target.NodeSelector = defaultTargetSpec.NodeSelector
-	}
-	if target.PriorityClassName == "" {
-		target.PriorityClassName = defaultTargetSpec.PriorityClassName
-	}
-	j.jvObj.Spec.Policy.Target = target
-	return j
-}
-
-// WithReplica defines the ReplicaSC field of JivaVolumePolicySpec
-func (j *Jiva) WithReplica(replica jv.ReplicaSpec) *Jiva {
-	if replica.Resources == nil {
-		replica.Resources = defaultReplicaSpec.Resources
-	}
-	if replica.Tolerations == nil {
-		replica.Tolerations = defaultReplicaSpec.Tolerations
-	}
-	if replica.Affinity == nil {
-		replica.Affinity = defaultReplicaSpec.Affinity
-	}
-	if replica.NodeSelector == nil {
-		replica.NodeSelector = defaultReplicaSpec.NodeSelector
-	}
-	if replica.PriorityClassName == "" {
-		replica.PriorityClassName = defaultReplicaSpec.PriorityClassName
-	}
-	j.jvObj.Spec.Policy.Replica = replica
 	return j
 }
