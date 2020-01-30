@@ -46,7 +46,6 @@ type NodeMounter struct {
 	mount.SafeFormatAndMount
 	client *client.Client
 	nodeID string
-	req    *request.Transition
 }
 
 func newNodeMounter() *NodeMounter {
@@ -65,12 +64,6 @@ func withClient(cli *client.Client) Optfunc {
 func withNodeID(nodeID string) Optfunc {
 	return func(n *NodeMounter) {
 		n.nodeID = nodeID
-	}
-}
-
-func withReqTransition(req *request.Transition) Optfunc {
-	return func(n *NodeMounter) {
-		n.req = req
 	}
 }
 
@@ -199,6 +192,7 @@ func (n *NodeMounter) MonitorMounts() {
 	for {
 		select {
 		case <-ticker.C:
+			request.TransitionVolListLock.Lock()
 			if mountList, err = n.List(); err != nil {
 				logrus.Debugf("MonitorMounts: failed to get list of mount paths, err: {%v}", err)
 				break
@@ -242,9 +236,13 @@ func (n *NodeMounter) MonitorMounts() {
 					continue
 				}
 
-				csivol := vol
-				go n.remount(csivol, stagingPathExists, targetPathExists)
+				if _, ok := request.TransitionVolList[vol.Name]; !ok {
+					request.TransitionVolList[vol.Name] = "Remount"
+					csivol := vol
+					go n.remount(csivol, stagingPathExists, targetPathExists)
+				}
 			}
+			request.TransitionVolListLock.Unlock()
 		}
 	}
 }
@@ -259,18 +257,13 @@ func verifyMountOpts(opts []string, desiredOpt string) bool {
 }
 
 func (n *NodeMounter) remount(vol jv.JivaVolume, stagingPathExists, targetPathExists bool) {
-	ok := n.req.Insert(vol.Name, "Remount")
-	if !ok {
-		logrus.Warningf("Remount: operation {%v} is already in progress on volume {%v}", n.req.GetOperation(vol.Name), vol.Name)
-		return
-	}
-
-	logrus.Infof("Remount: mount volume {%s} at StagingPath: {%s}, TargetPath: {%s}",
-		vol.Name, vol.Spec.MountInfo.StagingPath,
-		vol.Spec.MountInfo.TargetPath)
 	defer func() {
 		logrus.Infof("Remount: mount operation of volume: {%s} is finished", vol.Name)
-		n.req.Delete(vol.Name)
+		request.TransitionVolListLock.Lock()
+		// Remove the volume from ReqMountList once the remount operation is
+		// complete
+		delete(request.TransitionVolList, vol.Name)
+		request.TransitionVolListLock.Unlock()
 	}()
 
 	if err := n.remountVolume(

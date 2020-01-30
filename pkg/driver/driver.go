@@ -81,8 +81,7 @@ func New(config *config.Config, cli *client.Client) *CSIDriver {
 		if remount == "true" || remount == "True" {
 			nm := newNodeMounterWithOpts(
 				withClient(cli),
-				withNodeID(config.NodeID),
-				withReqTransition(ns.VolumeTransition))
+				withNodeID(config.NodeID))
 			go nm.MonitorMounts()
 		}
 		driver.ns = ns

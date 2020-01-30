@@ -75,20 +75,18 @@ type nodeStageRequest struct {
 // node is the server implementation
 // for CSI NodeServer
 type node struct {
-	client           *client.Client
-	driver           *CSIDriver
-	mounter          *NodeMounter
-	VolumeTransition *request.Transition
+	client  *client.Client
+	driver  *CSIDriver
+	mounter *NodeMounter
 }
 
 // NewNode returns a new instance
 // of CSI NodeServer
 func NewNode(d *CSIDriver, cli *client.Client) *node {
 	return &node{
-		client:           cli,
-		driver:           d,
-		mounter:          newNodeMounter(),
-		VolumeTransition: request.NewTransition(),
+		client:  cli,
+		driver:  d,
+		mounter: newNodeMounter(),
 	}
 }
 
@@ -167,14 +165,11 @@ func (ns *node) NodeStageVolume(
 	}
 
 	logrus.Infof("NodeStageVolume: start staging volume: {%q}", reqParam.volumeID)
-	if ok := ns.VolumeTransition.Insert(reqParam.volumeID, "NodeStage"); !ok {
-		msg := fmt.Sprintf("%s operation on volume: {%v} is already in progress", ns.VolumeTransition.GetOperation(reqParam.volumeID), reqParam.volumeID)
-		return nil, status.Error(codes.Aborted, msg)
+	if err := request.AddVolumeToTransitionList(reqParam.volumeID, "NodeStageVolume"); err != nil {
+		return nil, status.Error(codes.Aborted, err.Error())
 	}
-	defer func() {
-		logrus.Infof("NodeStageVolume: staging of volume: {%q} is finished", reqParam.volumeID)
-		ns.VolumeTransition.Delete(reqParam.volumeID)
-	}()
+
+	defer request.RemoveVolumeFromTransitionList(reqParam.volumeID)
 
 	// Check if volume is ready to serve IOs,
 	// info is fetched from the JivaVolume CR
@@ -266,15 +261,11 @@ func (ns *node) NodeUnstageVolume(
 	}
 
 	logrus.Infof("NodeUnstageVolume: start unstaging volume: {%q}", volID)
-	if ok := ns.VolumeTransition.Insert(volID, "NodeUnstageVolume"); !ok {
-		msg := fmt.Sprintf("%s operation on volume: {%v} is already in progress", ns.VolumeTransition.GetOperation(volID), volID)
-		return nil, status.Error(codes.Aborted, msg)
+	if err := request.AddVolumeToTransitionList(volID, "NodeUnStageVolume"); err != nil {
+		return nil, status.Error(codes.Aborted, err.Error())
 	}
 
-	defer func() {
-		logrus.Infof("NodeUnstageVolume: unstaging of volume: {%q} is finished", volID)
-		ns.VolumeTransition.Delete(volID)
-	}()
+	defer request.RemoveVolumeFromTransitionList(volID)
 
 	// Check if target directory is a mount point. GetDeviceNameFromMount
 	// given a mnt point, finds the device from /proc/mounts
@@ -393,15 +384,11 @@ func (ns *node) NodePublishVolume(
 	}
 
 	logrus.Infof("NodePublishVolume: start publishing volume: {%q}", volumeID)
-	if ok := ns.VolumeTransition.Insert(volumeID, "NodePublishVolume"); !ok {
-		msg := fmt.Sprintf("%s operation on volume: {%q} is already in progress", ns.VolumeTransition.GetOperation(volumeID), volumeID)
-		return nil, status.Error(codes.Aborted, msg)
+	if err := request.AddVolumeToTransitionList(volumeID, "NodePublishVolume"); err != nil {
+		return nil, status.Error(codes.Aborted, err.Error())
 	}
 
-	defer func() {
-		logrus.Infof("NodePublishVolume: publishing of volume: {%v} is finished", volumeID)
-		ns.VolumeTransition.Delete(volumeID)
-	}()
+	defer request.RemoveVolumeFromTransitionList(volumeID)
 
 	// Volume may be mounted at targetPath (bind mount in NodePublish)
 	if err := ns.isAlreadyMounted(volumeID, target); err != nil {
@@ -499,15 +486,11 @@ func (ns *node) NodeUnpublishVolume(
 		return nil, status.Error(codes.InvalidArgument, "Target path not provided")
 	}
 
-	if ok := ns.VolumeTransition.Insert(volumeID, "NodeUnpublishVolume"); !ok {
-		msg := fmt.Sprintf("%s operation on volume: {%v} is already in progress", ns.VolumeTransition.GetOperation(volumeID), volumeID)
-		return nil, status.Error(codes.Aborted, msg)
+	if err := request.AddVolumeToTransitionList(volumeID, "NodeUnPublishVolume"); err != nil {
+		return nil, status.Error(codes.Aborted, err.Error())
 	}
 
-	defer func() {
-		logrus.Infof("NodeUnPublishVolume: volume: {%q} operation finished", volumeID)
-		ns.VolumeTransition.Delete(volumeID)
-	}()
+	defer request.RemoveVolumeFromTransitionList(volumeID)
 
 	if err := ns.unmount(volumeID, target); err != nil {
 		return nil, err
