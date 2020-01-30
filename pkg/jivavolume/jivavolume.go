@@ -21,54 +21,6 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-)
-
-const (
-	defaultReplicaSC = "openebs-hostpath"
-)
-
-var (
-	zero              int64
-	defaultTargetSpec = jv.TargetSpec{
-		ReplicationFactor: 3,
-		AuxResources:      &corev1.ResourceRequirements{},
-		PodTemplateResources: jv.PodTemplateResources{
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("0"),
-					corev1.ResourceMemory: resource.MustParse("0"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("0"),
-					corev1.ResourceMemory: resource.MustParse("0"),
-				},
-			},
-			Tolerations:       []corev1.Toleration{},
-			NodeSelector:      nil,
-			PriorityClassName: "",
-			Affinity:          &corev1.Affinity{},
-		},
-	}
-	defaultReplicaSpec = jv.ReplicaSpec{
-		PodTemplateResources: jv.PodTemplateResources{
-			Resources: &corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("0"),
-					corev1.ResourceMemory: resource.MustParse("0"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("0"),
-					corev1.ResourceMemory: resource.MustParse("0"),
-				},
-			},
-			Tolerations:       nil,
-			NodeSelector:      nil,
-			PriorityClassName: "",
-			Affinity:          &corev1.Affinity{},
-		},
-	}
 )
 
 // Jiva wraps the JivaVolume structure
