@@ -24,6 +24,9 @@ import (
 func getStatistics(volumePath string) ([]*csi.VolumeUsage, error) {
 	var statfs unix.Statfs_t
 	// See http://man7.org/linux/man-pages/man2/statfs.2.html for details.
+	// TODO:
+	// This syscall may hang under some situations, need to find some way
+	// to cancel the execution of this function
 	err := unix.Statfs(volumePath, &statfs)
 	if err != nil {
 		return nil, err
