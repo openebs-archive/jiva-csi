@@ -3,6 +3,7 @@ kind: StorageClass
 metadata:
   name: openebs-jiva-csi-sc
 provisioner: jiva.csi.openebs.io
+allowVolumeExpansion: true
 parameters:
   cas-type: "jiva"
   replicaCount: "1"
@@ -37,7 +38,7 @@ spec:
       labels:
         name: fio
     spec:
-      nodeName: gke-utkarsh-csi-default-pool-953ba289-rt9l
+      #nodeName: gke-utkarsh-csi-default-pool-953ba289-rt9l
       containers:
       - name: perfrunner
         image: openebs/tests-fio

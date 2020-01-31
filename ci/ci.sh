@@ -1,11 +1,13 @@
 #!/bin/bash
 
 #set -ex
+test_repo="utkarshmani1997"
 
 function initializeTestEnv() {
 	echo "===================== Initialize test env ======================"
 	# Pull image so that provisioning won't take long time
 	docker pull openebs/jiva:ci
+	docker images | grep openebs/jiva
 	cat <<EOT >> /tmp/parameters.json
 {
         "cas-type": "jiva",
@@ -13,6 +15,8 @@ function initializeTestEnv() {
 }
 EOT
   sudo rm -rf /tmp/csi.sock
+	sudo rm -rf /tmp/csi-mount
+	sudo rm -rf /tmp/csi-staging
 }
 
 
@@ -26,9 +30,9 @@ function dumpLogs() {
 	local POD=$(kubectl get pod -n $NS -l $LABEL -o jsonpath='{range .items[*]}{@.metadata.name}')
 	if [ -z $CONTAINER ];
 	then
-		kubectl logs --tail=50 $POD -n $NS
+		kubectl logs $POD -n $NS
 	else
-		kubectl logs --tail=50 $POD -n $NS -c $CONTAINER
+		kubectl logs $POD -n $NS -c $CONTAINER
 	fi
 }
 
@@ -75,10 +79,10 @@ function waitForComponent() {
 
 function initializeCSISanitySuite() {
 	echo "=============== Initialize CSI Sanity test suite ==============="
-	CSI_TEST_REPO=https://github.com/kubernetes-csi/csi-test.git
-	CSI_REPO_PATH="$GOPATH/src/github.com/kubernetes-csi/csi-test"
+	CSI_TEST_REPO=https://github.com/$test_repo/csi-test.git
+	CSI_REPO_PATH="$GOPATH/src/github.com/$test_repo/csi-test"
 	if [ ! -d "$CSI_REPO_PATH" ] ; then
-		git clone $CSI_TEST_REPO $CSI_REPO_PATH
+		git clone -b add-volume-param $CSI_TEST_REPO $CSI_REPO_PATH
 	else
 		cd "$CSI_REPO_PATH"
 		git pull $CSI_REPO_PATH

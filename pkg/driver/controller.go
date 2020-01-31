@@ -17,15 +17,23 @@ limitations under the License.
 package driver
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
 	"github.com/openebs/jiva-csi/pkg/utils"
+	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
+	"github.com/openebs/jiva-operator/pkg/jiva"
+	"github.com/openebs/jiva-operator/pkg/volume"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/cloud-provider/volume/helpers"
 )
 
 // controller is the server implementation
@@ -48,6 +56,11 @@ var SupportedVolumeCapabilityAccessType = []*csi.VolumeCapability_Mount{
 		Mount: &csi.VolumeCapability_MountVolume{},
 	},
 }
+
+var (
+	httpReqRetryCount    = 5
+	httpReqRetryInterval = 2 * time.Second
+)
 
 // NewController returns a new instance
 // of CSI controller
@@ -164,6 +177,56 @@ func (cs *controller) ControllerGetCapabilities(
 	return resp, nil
 }
 
+func (cs *controller) isVolumeReady(volumeID string) (*jv.JivaVolume, error) {
+	var interval time.Duration = 0
+	var instance *jv.JivaVolume
+	var i int
+	for i = 0; i <= MaxRetryCount; i++ {
+		if i == MaxRetryCount {
+			return nil, status.Errorf(codes.Internal, "ExpandVolume: max retry count exceeded")
+		}
+		time.Sleep(interval * time.Second)
+		// set client each time to avoid caching issue
+		err := cs.client.Set()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "ExpandVolume: failed to set client, err: %v", err)
+		}
+
+		instance, err = cs.client.GetJivaVolume(volumeID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "ExpandVolume: failed to get JivaVolume, err: %v", err)
+		}
+
+		interval = 5
+		repCount, rf := instance.Status.ReplicaCount, instance.Spec.ReplicationFactor
+		if strconv.Itoa(repCount) != rf {
+			logrus.Warningf("All replicas are not up, RF: %v, ReplicaCount: %v", rf, repCount)
+			continue
+		}
+
+		statuses := instance.Status.ReplicaStatuses
+		if len(statuses) == 0 {
+			logrus.Warning("Replica's status is nil, volume must be initializing")
+			continue
+		}
+
+		cnt := 0
+		for _, rep := range statuses {
+			if rep.Mode == "RW" {
+				cnt++
+			} else {
+				return nil, status.Errorf(codes.Internal, "Replica: %s mode is %s", rep.Address, rep.Mode)
+			}
+		}
+
+		desired, _ := strconv.Atoi(rf)
+		if cnt == desired {
+			break
+		}
+	}
+	return instance, nil
+}
+
 // ControllerExpandVolume resizes previously provisioned volume
 //
 // This implements csi.ControllerServer
@@ -171,8 +234,83 @@ func (cs *controller) ControllerExpandVolume(
 	ctx context.Context,
 	req *csi.ControllerExpandVolumeRequest,
 ) (*csi.ControllerExpandVolumeResponse, error) {
+	volumeID := req.GetVolumeId()
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	}
 
-	return nil, status.Error(codes.Unimplemented, "")
+	volumeID = utils.StripName(volumeID)
+	jivaVolume, err := cs.isVolumeReady(volumeID)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedSize := req.GetCapacityRange().GetRequiredBytes()
+	vol := volume.Volumes{}
+	ctrlIP := jivaVolume.Spec.ISCSISpec.TargetIP
+	if len(ctrlIP) == 0 {
+		return nil, status.Errorf(codes.Internal, "Target IP is nil")
+	}
+
+	cli := jiva.NewControllerClient(jivaVolume.Spec.ISCSISpec.TargetIP + ":9501")
+	cli.SetTimeout(30 * time.Second)
+	retryCount := 0
+	var httpErr error
+	for retryCount < httpReqRetryCount {
+		httpErr = cli.Get("/volumes", &vol)
+		if httpErr == nil {
+			break
+		}
+		time.Sleep(httpReqRetryInterval)
+		retryCount++
+	}
+
+	if httpErr != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to get volume info from jiva controller, err: %v", httpErr)
+	}
+
+	if len(vol.Data) == 0 {
+		return nil, status.Error(codes.Internal, "Failed to get volume info, no volume found")
+	}
+
+	size := resource.NewQuantity(updatedSize, resource.BinarySI)
+	volSizeGiB := helpers.RoundUpToGiB(*size)
+	capacity := fmt.Sprintf("%dGi", volSizeGiB)
+
+	input := volume.ResizeInput{
+		Name: vol.Data[0].Name,
+		Size: capacity,
+	}
+
+	retryCount = 0
+	for retryCount < httpReqRetryCount {
+		httpErr = cli.Post(vol.Data[0].Actions["resize"], input, nil)
+		if httpErr == nil {
+			break
+		}
+		time.Sleep(httpReqRetryInterval)
+		retryCount++
+	}
+
+	if httpErr != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to post resize request to jiva controller, err: %v", httpErr)
+	}
+
+	// set client each time to avoid caching issue
+	if err = cs.client.Set(); err != nil {
+		return nil, status.Errorf(codes.Internal, "DeleteVolume: failed to set client, err: %v", err)
+	}
+
+	jivaVolume.Spec.Capacity = capacity
+	err = cs.client.UpdateJivaVolume(jivaVolume)
+	if err != nil {
+		return nil, err
+	}
+
+	return &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         updatedSize,
+		NodeExpansionRequired: true,
+	}, nil
 }
 
 // CreateSnapshot creates a snapshot for given volume
@@ -287,6 +425,7 @@ func newControllerCapabilities() []*csi.ControllerServiceCapability {
 	var capabilities []*csi.ControllerServiceCapability
 	for _, cap := range []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 	} {
 		capabilities = append(capabilities, fromType(cap))
 	}

@@ -1,5 +1,5 @@
 language: go
-dist: xenial
+dist: bionic
 sudo: required
 install: true
 services:
@@ -27,14 +27,17 @@ install:
 before_install:
   - git clone https://www.github.com/openebs/jiva-operator $GOPATH/src/github.com/openebs/jiva-operator
   - sudo apt-get install -y open-iscsi
-  - sudo service iscsid start
+  - sudo service open-iscsi restart
+  - sudo systemctl enable iscsid && sudo systemctl start iscsid
+  - sudo cat /etc/iscsi/initiatorname.iscsi
+  - systemctl status iscsid
   # Download kubectl, which is a requirement for using minikube.
-  - curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/v1.14.8/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+  - curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/v1.15.7/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
   # Download minikube.
-  - curl -Lo minikube https://storage.googleapis.com/minikube/releases/v1.5.2/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
+  - curl -Lo minikube https://storage.googleapis.com/minikube/releases/v1.6.2/minikube-linux-amd64 && chmod +x minikube && sudo mv minikube /usr/local/bin/
   - mkdir -p $HOME/.kube $HOME/.minikube
   - touch $KUBECONFIG
-  - sudo minikube start --vm-driver=none --kubernetes-version=v1.14.8
+  - sudo minikube start --vm-driver=none --kubernetes-version=v1.15.7
   - "sudo chown -R travis: /home/travis/.minikube/"
 script:
   - kubectl cluster-info
@@ -47,8 +50,9 @@ script:
   - kubectl apply -f openebs-operator.yaml
   - kubectl apply -f deploy/
   - cd ${TRAVIS_BUILD_DIR}
-  - kubectl apply -f deploy/jiva-csi-ubuntu-16.04.yaml
+  - kubectl apply -f deploy/jiva-csi.yaml
   - ./ci/ci.sh
+
 after_success:
   - make push-tag
 notifications:

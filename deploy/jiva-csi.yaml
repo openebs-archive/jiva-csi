@@ -33,10 +33,13 @@ rules:
     verbs: ["get", "list"]
   - apiGroups: [""]
     resources: ["persistentvolumes", "services"]
-    verbs: ["get", "list", "watch", "create", "delete"]
+    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims/status"]
+    verbs: ["update", "patch"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses", "csinodes"]
     verbs: ["get", "list", "watch"]
@@ -45,6 +48,9 @@ rules:
     verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: ["*"]
     resources: ["jivavolumes"]
+    verbs: ["*"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
     verbs: ["*"]
 ---
 kind: ClusterRoleBinding
@@ -82,7 +88,7 @@ spec:
       serviceAccount: openebs-jiva-csi-controller-sa
       containers:
         - name: csi-provisioner
-          image: quay.io/k8scsi/csi-provisioner:v1.0.1
+          image: quay.io/k8scsi/csi-provisioner:v1.5.0
           imagePullPolicy: IfNotPresent
           args:
             - "--provisioner=jiva.csi.openebs.io"
@@ -95,7 +101,7 @@ spec:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: csi-attacher
-          image: quay.io/k8scsi/csi-attacher:v1.0.1
+          image: quay.io/k8scsi/csi-attacher:v2.0.0
           imagePullPolicy: IfNotPresent
           args:
             - "--v=5"
@@ -128,6 +134,21 @@ spec:
             - "--nodeid=$(OPENEBS_NODEID)"
             # logging level for klog library used in k8s packages
             # - "--v=5"
+            # retry count to check if volume is ready in volume expand call
+            - "--retrycount=20"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /var/lib/csi/sockets/pluginproxy/
+        - name: csi-resizer
+          image: quay.io/k8scsi/csi-resizer:v0.3.0
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--leader-election"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+          imagePullPolicy: IfNotPresent
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -135,7 +156,7 @@ spec:
           volumeMounts:
           - mountPath: /csi
             name: socket-dir
-          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          image: quay.io/k8scsi/livenessprobe:v2.0.0
           args:
           - "--csi-address=/csi/csi.sock"
       volumes:
@@ -151,7 +172,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["persistentvolumes"]
-    verbs: ["get", "list", "watch", "update"]
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
@@ -234,7 +255,7 @@ spec:
       hostNetwork: true
       containers:
         - name: csi-node-driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.0.1
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.2.0
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -278,9 +299,9 @@ spec:
             #- "--v=5"
             # retrycount is the max number of retries per nodeStaging rpc
             # request on a timeout of 5 sec
-            # This count has been set to 10 for sanity test cases as it takes
+            # This count has been set to 20 for sanity test cases as it takes
             # time in minikube
-            - "--retrycount=10"
+            - "--retrycount=20"
             # metricsBindAddress is the TCP address that the controller should bind to
             # for serving prometheus metrics. By default the address is set to localhost:9505.
             # The address can be configured to any desired address.
@@ -300,7 +321,7 @@ spec:
             # REMOUNT: if set true/True volume will be automatically remounted
             # in case if the mountpoint goes to ro state
             - name: REMOUNT
-              value: True
+              value: "True"
           volumeMounts:
             - name: plugin-dir
               mountPath: /plugin
@@ -317,7 +338,7 @@ spec:
             - name: iscsiadm-lib-isns-nocrypto
               mountPath: /lib/x86_64-linux-gnu/libisns-nocrypto.so.0
         - name: liveness-probe
-          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          image: quay.io/k8scsi/livenessprobe:v2.0.0
           args:
           - "--csi-address=/plugin/csi.sock"
           volumeMounts:

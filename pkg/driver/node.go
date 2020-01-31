@@ -63,6 +63,7 @@ var (
 	nodeCaps = []csi.NodeServiceCapability_RPC_Type{
 		csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
 		csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+		csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
 	}
 )
 
@@ -601,8 +602,55 @@ func (ns *node) NodeExpandVolume(
 	ctx context.Context,
 	req *csi.NodeExpandVolumeRequest,
 ) (*csi.NodeExpandVolumeResponse, error) {
+	volumeID := req.GetVolumeId()
+	if volumeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "NodeGetVolumeStats Volume ID must be provided")
+	}
 
-	return nil, nil
+	volumePath := req.GetVolumePath()
+	if volumePath == "" {
+		return nil, status.Error(codes.InvalidArgument, "NodeGetVolumeStats Volume Path must be provided")
+	}
+
+	if err := request.AddVolumeToTransitionList(volumeID, "NodeExpandVolume"); err != nil {
+		return nil, status.Error(codes.Aborted, err.Error())
+	}
+
+	defer request.RemoveVolumeFromTransitionList(volumeID)
+
+	mounted, err := ns.mounter.ExistsPath(volumePath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to check if volume path %q is mounted: %s", volumePath, err)
+	}
+
+	if !mounted {
+		return nil, status.Errorf(codes.NotFound, "volume path %q is not mounted", volumePath)
+	}
+
+	// JivaVolume CR may be updated by jiva-operator
+	instance, err := ns.doesVolumeExist(volumeID)
+	if err != nil {
+		return nil, err
+	}
+
+	resize := resizeInput{
+		volumePath: volumePath,
+		fsType:     instance.Spec.MountInfo.FSType,
+		exec:       ns.mounter.Exec,
+	}
+
+	list, err := ns.mounter.List()
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if err := resize.volume(list); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &csi.NodeExpandVolumeResponse{
+		CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
+	}, nil
 }
 
 // NodeGetVolumeStats returns statistics for the
