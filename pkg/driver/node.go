@@ -612,15 +612,11 @@ func (ns *node) NodeExpandVolume(
 		return nil, status.Error(codes.InvalidArgument, "NodeGetVolumeStats Volume Path must be provided")
 	}
 
-	if ok := ns.volumeTransition.Insert(volumeID); !ok {
-		msg := fmt.Sprintf("an operation on this volume=%q is already in progress", volumeID)
-		return nil, status.Error(codes.Aborted, msg)
+	if err := request.AddVolumeToTransitionList(volumeID, "NodeExpandVolume"); err != nil {
+		return nil, status.Error(codes.Aborted, err.Error())
 	}
 
-	defer func() {
-		logrus.Infof("NodeExpandVolume: volume: {%q} operation finished", volumeID)
-		ns.volumeTransition.Delete(volumeID)
-	}()
+	defer request.RemoveVolumeFromTransitionList(volumeID)
 
 	mounted, err := ns.mounter.ExistsPath(volumePath)
 	if err != nil {

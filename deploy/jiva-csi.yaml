@@ -321,7 +321,7 @@ spec:
             # REMOUNT: if set true/True volume will be automatically remounted
             # in case if the mountpoint goes to ro state
             - name: REMOUNT
-              value: True
+              value: "True"
           volumeMounts:
             - name: plugin-dir
               mountPath: /plugin
