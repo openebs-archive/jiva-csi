@@ -6,7 +6,7 @@ require (
 	github.com/container-storage-interface/spec v1.1.0
 	github.com/kubernetes-csi/csi-lib-iscsi v0.0.0-20191120152119-1430b53a1741
 	github.com/kubernetes-csi/csi-lib-utils v0.6.1
-	github.com/openebs/jiva-operator v0.0.0-20191128062733-08c184aa7f8a
+	github.com/openebs/jiva-operator v0.0.0-20200121055138-784b9dcc671c
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc

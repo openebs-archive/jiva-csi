@@ -1,47 +1,38 @@
 package request
 
 import (
+	"fmt"
 	"sync"
 )
 
-// Interface is used to handle the inflight requests
-type Interface interface {
-	String() string
+var (
+
+	// TransitionVolList contains the list of volumes under transition
+	// This list is protected by TransitionVolListLock
+	TransitionVolList map[string]string
+
+	// TransitionVolListLock is required to protect the above Volumes list
+	TransitionVolListLock sync.RWMutex
+)
+
+func init() {
+	TransitionVolList = make(map[string]string)
 }
 
-// Transition is a struct used to manage inflight volume creation request.
-type Transition struct {
-	mux    *sync.Mutex
-	volume map[string]bool
+func RemoveVolumeFromTransitionList(volumeID string) {
+	TransitionVolListLock.Lock()
+	defer TransitionVolListLock.Unlock()
+	delete(TransitionVolList, volumeID)
 }
 
-// NewTransition instanciates Transition.
-func NewTransition() *Transition {
-	return &Transition{
-		mux:    &sync.Mutex{},
-		volume: make(map[string]bool),
+func AddVolumeToTransitionList(volumeID string, req string) error {
+	TransitionVolListLock.Lock()
+	defer TransitionVolListLock.Unlock()
+
+	if _, ok := TransitionVolList[volumeID]; ok {
+		return fmt.Errorf("Volume Busy, %v is already in progress",
+			TransitionVolList[volumeID])
 	}
-}
-
-// Insert insert the volume create req hash into map
-// TODO: Add request info as well to know about which request is in progress
-func (t *Transition) Insert(volID string) bool {
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	_, ok := t.volume[volID]
-	if ok {
-		return false
-	}
-
-	t.volume[volID] = true
-	return true
-}
-
-// Delete removes the req from the map
-func (t *Transition) Delete(volID string) {
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	delete(t.volume, volID)
+	TransitionVolList[volumeID] = req
+	return nil
 }

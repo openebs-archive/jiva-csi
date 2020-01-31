@@ -17,6 +17,8 @@ limitations under the License.
 package driver
 
 import (
+	"os"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	config "github.com/openebs/jiva-csi/pkg/config"
 	"github.com/openebs/jiva-csi/pkg/kubernetes/client"
@@ -74,7 +76,15 @@ func New(config *config.Config, cli *client.Client) *CSIDriver {
 		driver.cs = NewController(cli)
 
 	case "node":
-		driver.ns = NewNode(driver, cli)
+		ns := NewNode(driver, cli)
+		remount := os.Getenv("REMOUNT")
+		if remount == "true" || remount == "True" {
+			nm := newNodeMounterWithOpts(
+				withClient(cli),
+				withNodeID(config.NodeID))
+			go nm.MonitorMounts()
+		}
+		driver.ns = ns
 	}
 
 	// Identity server is common to both node and

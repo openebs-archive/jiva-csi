@@ -45,7 +45,6 @@ script:
   - cd $GOPATH/src/github.com/openebs/jiva-operator
   - wget https://raw.githubusercontent.com/openebs/openebs/master/k8s/openebs-operator.yaml
   - kubectl apply -f openebs-operator.yaml
-  - kubectl apply -f deploy/crds/openebs_v1alpha1_jivavolume_crd.yaml
   - kubectl apply -f deploy/
   - cd ${TRAVIS_BUILD_DIR}
   - kubectl apply -f deploy/jiva-csi-ubuntu-16.04.yaml

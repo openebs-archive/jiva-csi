@@ -269,7 +269,7 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - "--name=jiva.csi.openebs.io"
-            - "--nodeid=$(OPENEBS_NODEID)"
+            - "--nodeid=$(OPENEBS_NODE_ID)"
             - "--endpoint=$(OPENEBS_CSI_ENDPOINT)"
             - "--plugin=$(OPENEBS_NODE_DRIVER)"
             # enableiscsidebug is used to enable debug logs for iscsi operations
@@ -297,6 +297,10 @@ spec:
               value: node
             - name: OPENEBS_NAMESPACE
               value: openebs
+            # REMOUNT: if set true/True volume will be automatically remounted
+            # in case if the mountpoint goes to ro state
+            - name: REMOUNT
+              value: True
           volumeMounts:
             - name: plugin-dir
               mountPath: /plugin

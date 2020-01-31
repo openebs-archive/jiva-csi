@@ -95,11 +95,11 @@ func (cl *Client) GetJivaVolume(name string) (*jv.JivaVolume, error) {
 	instance, err := cl.ListJivaVolume(name)
 	if err != nil {
 		logrus.Errorf("Failed to get JivaVolume CR: %v, err: %v", name, err)
-		return nil, status.Errorf(codes.Internal, "failed to get JivaVolume CR: {%v}, err: %v", name, err)
+		return nil, status.Errorf(codes.Internal, "Failed to get JivaVolume CR: {%v}, err: {%v}", name, err)
 	}
 
 	if len(instance.Items) == 0 {
-		return nil, status.Errorf(codes.NotFound, "failed to get JivaVolume CR: {%v}", name)
+		return nil, status.Errorf(codes.NotFound, "Failed to get JivaVolume CR: {%v}", name)
 	}
 
 	return &instance.Items[0], nil
@@ -109,7 +109,7 @@ func (cl *Client) GetJivaVolume(name string) (*jv.JivaVolume, error) {
 func (cl *Client) UpdateJivaVolume(cr *jv.JivaVolume) error {
 	err := cl.client.Update(context.TODO(), cr)
 	if err != nil {
-		logrus.Errorf("Failed to update JivaVolume CR: %v, err: %v", cr.Name, err)
+		logrus.Errorf("Failed to update JivaVolume CR: {%v}, err: {%v}", cr.Name, err)
 		return err
 	}
 	return nil
@@ -135,7 +135,7 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	}
 
 	if req.GetCapacityRange() == nil {
-		logrus.Warningf("CreateVolume: capacity range is nil, provisioning with default size: %v (bytes)", defaultSizeBytes)
+		logrus.Warningf("CreateVolume: capacity range is nil, provisioning with default size: {%v (bytes)}", defaultSizeBytes)
 		sizeBytes = defaultSizeBytes
 	} else {
 		sizeBytes = req.GetCapacityRange().RequiredBytes
@@ -190,7 +190,7 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 		})
 
 	if jiva.Errs != nil {
-		return status.Errorf(codes.Internal, "failed to build JivaVolume CR, err: %v", jiva.Errs)
+		return status.Errorf(codes.Internal, "Failed to build JivaVolume CR, err: {%v}", jiva.Errs)
 	}
 
 	obj := jiva.Instance()
@@ -200,15 +200,15 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 		logrus.Infof("Creating a new JivaVolume CR {name: %v, namespace: %v}", name, ns)
 		err = cl.client.Create(context.TODO(), obj)
 		if err != nil {
-			return status.Errorf(codes.Internal, "failed to create JivaVolume CR, err: %v", err)
+			return status.Errorf(codes.Internal, "Failed to create JivaVolume CR, err: {%v}", err)
 		}
 		return nil
 	} else if err != nil {
-		return status.Errorf(codes.Internal, "failed to get the JivaVolume details, err: %v", err)
+		return status.Errorf(codes.Internal, "Failed to get the JivaVolume details, err: {%v}", err)
 	}
 
 	if objExists.Spec.Capacity != obj.Spec.Capacity {
-		return status.Errorf(codes.AlreadyExists, "failed to create JivaVolume CR, volume with different size already exists")
+		return status.Errorf(codes.AlreadyExists, "Failed to create JivaVolume CR, volume with different size already exists")
 	}
 
 	return nil
@@ -223,6 +223,20 @@ func (cl *Client) ListJivaVolume(volumeID string) (*jv.JivaVolumeList, error) {
 	}
 
 	if err := cl.client.List(context.TODO(), obj, opts...); err != nil {
+		return nil, err
+	}
+
+	return obj, nil
+}
+
+// ListJivaVolumeWithOpts returns the list of JivaVolume resources
+func (cl *Client) ListJivaVolumeWithOpts(opts map[string]string) (*jv.JivaVolumeList, error) {
+	obj := &jv.JivaVolumeList{}
+	options := []client.ListOption{
+		client.MatchingLabels(opts),
+	}
+
+	if err := cl.client.List(context.TODO(), obj, options...); err != nil {
 		return nil, err
 	}
 
