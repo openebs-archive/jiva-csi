@@ -14,7 +14,6 @@ require (
 	golang.org/x/text v0.3.2 // indirect
 	google.golang.org/genproto v0.0.0-20181202183823-bd91e49a0898 // indirect
 	google.golang.org/grpc v1.21.0
-	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/cloud-provider v0.0.0
@@ -24,7 +23,7 @@ require (
 )
 
 replace (
-	github.com/openebs/jiva-operator => github.com/shubham14bajpai/jiva-operator a3a1919cdf152e0653a547b084f831971a22fd1f
+	github.com/openebs/jiva-operator => github.com/shubham14bajpai/jiva-operator v0.0.0-20200129140224-a3a1919cdf15
 	k8s.io/api => k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190620085554-14e95df34f1f
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
