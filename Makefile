@@ -1,6 +1,9 @@
 # Output registry and image names for operator image
 # Set env to override this value
-REGISTRY ?= openebs
+ifeq (${REGISTRY}, )
+  REGISTRY:=openebs
+endif
+export REGISTRY
 
 # Output plugin name and its image name and tag
 PLUGIN_NAME=jiva-csi
@@ -109,7 +112,7 @@ push-image: image
 
 push:
 	@echo "--> Push image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
-	docker push $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG)
+	@DIMAGE=$(REGISTRY)/$(PLUGIN_NAME) ./build/push
 
 tag:
 	@echo "--> Tag image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) to $(REGISTRY)/$(PLUGIN_NAME):$(GIT_TAG) ..."
