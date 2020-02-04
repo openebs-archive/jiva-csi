@@ -109,7 +109,7 @@ push-image: image
 
 push:
 	@echo "--> Push image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
-	docker push $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG)
+	@DIMAGE=$(REGISTRY)/$(PLUGIN_NAME) ./build/push
 
 tag:
 	@echo "--> Tag image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) to $(REGISTRY)/$(PLUGIN_NAME):$(GIT_TAG) ..."
