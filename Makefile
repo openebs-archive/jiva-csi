@@ -1,6 +1,9 @@
 # Output registry and image names for operator image
 # Set env to override this value
-REGISTRY ?= openebs
+ifeq (${REGISTRY}, )
+  REGISTRY:=openebs
+endif
+export REGISTRY
 
 # Output plugin name and its image name and tag
 PLUGIN_NAME=jiva-csi
