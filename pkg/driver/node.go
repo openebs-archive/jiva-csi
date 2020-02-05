@@ -396,17 +396,6 @@ func (ns *node) NodePublishVolume(
 		return nil, err
 	}
 
-	// JivaVolume CR may be updated by jiva-operator
-	instance, err := ns.doesVolumeExist(volumeID)
-	if err != nil {
-		return nil, err
-	}
-
-	instance.Spec.MountInfo.TargetPath = target
-	if err := ns.client.UpdateJivaVolume(instance); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
 	mountOptions := []string{"bind"}
 	if req.GetReadonly() {
 		mountOptions = append(mountOptions, "ro")

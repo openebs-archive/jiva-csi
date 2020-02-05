@@ -25,7 +25,7 @@ install:
   - make bootstrap
 
 before_install:
-  - git clone --branch=policy https://github.com/shubham14bajpai/jiva-operator $GOPATH/src/github.com/openebs/jiva-operator
+  - git clone https://www.github.com/openebs/jiva-operator $GOPATH/src/github.com/openebs/jiva-operator
   - sudo apt-get install -y open-iscsi
   - sudo service open-iscsi restart
   - sudo systemctl enable iscsid && sudo systemctl start iscsid
