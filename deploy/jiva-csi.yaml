@@ -44,7 +44,7 @@ rules:
     resources: ["events"]
     verbs: ["list", "watch", "create", "update", "patch"]
   - apiGroups: ["*"]
-    resources: ["jivavolumes"]
+    resources: ["jivavolumes", "jivavolumepolicies"]
     verbs: ["*"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]

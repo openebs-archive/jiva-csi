@@ -18,7 +18,6 @@ package driver
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -198,8 +197,8 @@ func (cs *controller) isVolumeReady(volumeID string) (*jv.JivaVolume, error) {
 		}
 
 		interval = 5
-		repCount, rf := instance.Status.ReplicaCount, instance.Spec.ReplicationFactor
-		if strconv.Itoa(repCount) != rf {
+		repCount, rf := instance.Status.ReplicaCount, instance.Spec.Policy.Target.ReplicationFactor
+		if repCount != rf {
 			logrus.Warningf("All replicas are not up, RF: %v, ReplicaCount: %v", rf, repCount)
 			continue
 		}
@@ -219,7 +218,7 @@ func (cs *controller) isVolumeReady(volumeID string) (*jv.JivaVolume, error) {
 			}
 		}
 
-		desired, _ := strconv.Atoi(rf)
+		desired := rf
 		if cnt == desired {
 			break
 		}

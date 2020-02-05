@@ -28,7 +28,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,11 +38,9 @@ import (
 )
 
 const (
-	defaultReplicaCount = "3"
-	defaultReplicaSC    = "openebs-hostpath"
-	defaultNS           = "openebs"
-	maxNameLen          = 63
-	defaultSizeBytes    = 5 * helpers.GiB
+	defaultReplicaSC = "openebs-hostpath"
+	defaultNS        = "openebs"
+	defaultSizeBytes = 5 * helpers.GiB
 )
 
 // Client is the wrapper over the k8s client that will be used by
@@ -122,18 +119,24 @@ func getDefaultLabels(pv string) map[string]string {
 	}
 }
 
+func getdefaultAnnotations(policy string) map[string]string {
+	annotations := map[string]string{}
+	if policy != "" {
+		annotations["openebs.io/volume-policy"] = policy
+	}
+	return annotations
+}
+
 // CreateJivaVolume check whether JivaVolume CR already exists and creates one
 // if it doesn't exist.
 func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	var sizeBytes int64
 	name := utils.StripName(req.GetName())
-	sc := req.GetParameters()["replicaSC"]
-	rf := req.GetParameters()["replicaCount"]
+	policyName := req.GetParameters()["policy"]
 	ns, ok := req.GetParameters()["namespace"]
 	if !ok {
 		ns = defaultNS
 	}
-
 	if req.GetCapacityRange() == nil {
 		logrus.Warningf("CreateVolume: capacity range is nil, provisioning with default size: {%v (bytes)}", defaultSizeBytes)
 		sizeBytes = defaultSizeBytes
@@ -146,48 +149,10 @@ func (cl *Client) CreateJivaVolume(req *csi.CreateVolumeRequest) error {
 	capacity := fmt.Sprintf("%dGi", volSizeGiB)
 	jiva := jivavolume.New().WithKindAndAPIVersion("JivaVolume", "openebs.io/v1alpha1").
 		WithNameAndNamespace(name, ns).
+		WithAnnotations(getdefaultAnnotations(policyName)).
 		WithLabels(getDefaultLabels(name)).
-		WithSpec(jv.JivaVolumeSpec{
-			PV:       name,
-			Capacity: capacity,
-			ReplicaSC: func(sc string) string {
-				if sc == "" {
-					return defaultReplicaSC
-				}
-				return sc
-			}(sc),
-			ReplicaResource: func(req *csi.CreateVolumeRequest) v1.ResourceRequirements {
-				return v1.ResourceRequirements{
-					Requests: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMinCPU")),
-						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMinMemory")),
-					},
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMaxCPU")),
-						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("replicaMaxMemory")),
-					},
-				}
-			}(req),
-
-			TargetResource: func(req *csi.CreateVolumeRequest) v1.ResourceRequirements {
-				return v1.ResourceRequirements{
-					Requests: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("targetMinCPU")),
-						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("targetMinMemory")),
-					},
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse(jivavolume.HasResourceParameters(req)("targetMaxCPU")),
-						v1.ResourceMemory: resource.MustParse(jivavolume.HasResourceParameters(req)("targetMaxMemory")),
-					},
-				}
-			}(req),
-			ReplicationFactor: func(rf string) string {
-				if rf == "" {
-					return defaultReplicaCount
-				}
-				return rf
-			}(rf),
-		})
+		WithPV(name).
+		WithCapacity(capacity)
 
 	if jiva.Errs != nil {
 		return status.Errorf(codes.Internal, "Failed to build JivaVolume CR, err: {%v}", jiva.Errs)

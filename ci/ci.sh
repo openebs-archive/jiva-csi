@@ -11,7 +11,7 @@ function initializeTestEnv() {
 	cat <<EOT >> /tmp/parameters.json
 {
         "cas-type": "jiva",
-        "replicaCount": "1"
+        "policy": "example-jivavolumepolicy"
 }
 EOT
   sudo rm -rf /tmp/csi.sock
@@ -117,7 +117,20 @@ function startTestSuite() {
 	exit 0
 }
 
+function createJivaVolumePolicy() {
+	echo "================== Create Jiva Volume Policy ================="
+	cd $GOPATH/src/github.com/openebs/jiva-operator
+	kubectl apply -f deploy/crds/openebs.io_v1alpha1_jivavolumepolicy_cr.yaml
+	if [ $? -ne 0 ];
+	then
+		dumpAllLogs
+		exit 1
+	fi
+	exit 0
+}
+
 initializeTestEnv
 waitForAllComponentsToBeReady
+createJivaVolumePolicy
 initializeCSISanitySuite
 startTestSuite

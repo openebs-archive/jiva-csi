@@ -87,6 +87,17 @@ func (j *Jiva) WithLabels(labels map[string]string) *Jiva {
 	return j
 }
 
+// WithAnnotations is used to set the annotations in JivaVolume CR
+func (j *Jiva) WithAnnotations(annotations map[string]string) *Jiva {
+	if annotations != nil {
+		j.jvObj.Annotations = annotations
+	} else {
+		j.Errs = append(j.Errs,
+			errors.New("failed to initialize JivaVolume: annotations are missing"))
+	}
+	return j
+}
+
 // ResourceParameters is a function type which return resource values
 type ResourceParameters func(param string) string
 
@@ -102,16 +113,14 @@ func HasResourceParameters(req *csi.CreateVolumeRequest) ResourceParameters {
 	}
 }
 
-// WithReplicaStorageClass returns storage class
-func WithReplicaStorageClass(sc string) string {
-	if sc == "" {
-		return "openebs-hostpath"
-	}
-	return sc
+// WithPV defines the PV field of JivaVolumeSpec
+func (j *Jiva) WithPV(pvName string) *Jiva {
+	j.jvObj.Spec.PV = pvName
+	return j
 }
 
-// WithSpec defines the Spec field of JivaVolume
-func (j *Jiva) WithSpec(spec jv.JivaVolumeSpec) *Jiva {
-	j.jvObj.Spec = spec
+// WithCapacity defines the Capacity field of JivaVolumeSpec
+func (j *Jiva) WithCapacity(capacity string) *Jiva {
+	j.jvObj.Spec.Capacity = capacity
 	return j
 }
