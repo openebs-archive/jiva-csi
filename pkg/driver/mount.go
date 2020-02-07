@@ -194,6 +194,7 @@ func (n *NodeMounter) MonitorMounts() {
 		case <-ticker.C:
 			request.TransitionVolListLock.Lock()
 			if mountList, err = n.List(); err != nil {
+				request.TransitionVolListLock.Unlock()
 				logrus.Debugf("MonitorMounts: failed to get list of mount paths, err: {%v}", err)
 				break
 			}
@@ -201,13 +202,15 @@ func (n *NodeMounter) MonitorMounts() {
 			// reset the client to avoid caching issue
 			err = n.client.Set()
 			if err != nil {
+				request.TransitionVolListLock.Unlock()
 				logrus.Warningf("MonitorMounts: failed to set client, err: {%v}", err)
-				continue
+				break
 			}
 
 			if csivolList, err = n.client.ListJivaVolumeWithOpts(map[string]string{
 				"nodeID": n.nodeID,
 			}); err != nil {
+				request.TransitionVolListLock.Unlock()
 				logrus.Debugf("MonitorMounts: failed to get list of jiva volumes attached to this node, err: {%v}", err)
 				break
 			}
