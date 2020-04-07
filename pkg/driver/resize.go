@@ -6,9 +6,11 @@ import (
 )
 
 type resizeInput struct {
-	volumePath string
-	fsType     string
-	exec       mount.Exec
+	volumePath   string
+	fsType       string
+	iqn          string
+	targetPortal string
+	exec         mount.Exec
 }
 
 func (r resizeInput) volume(list []mount.MountPoint) error {
@@ -35,7 +37,8 @@ func (r resizeInput) volume(list []mount.MountPoint) error {
 
 // ReScan rescans all the iSCSI sessions on the host
 func (r resizeInput) reScan() error {
-	out, err := r.exec.Run("iscsiadm", "-m", "session", "--rescan")
+	logrus.Info("Rescan ISCSI session")
+	out, err := r.exec.Run("iscsiadm", "-m", "node", "-T", r.iqn, "-P", r.targetPortal, "--rescan")
 	if err != nil {
 		logrus.Errorf("iscsi: rescan failed error: %s", string(out))
 		return err

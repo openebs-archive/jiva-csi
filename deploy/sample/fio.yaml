@@ -6,8 +6,7 @@ provisioner: jiva.csi.openebs.io
 allowVolumeExpansion: true
 parameters:
   cas-type: "jiva"
-  replicaCount: "1"
-  replicaSC: "openebs-hostpath"
+  policy: "example-jivavolumepolicy"
 ---
 kind: PersistentVolumeClaim
 apiVersion: v1

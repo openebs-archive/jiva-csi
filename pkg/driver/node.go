@@ -634,9 +634,11 @@ func (ns *node) NodeExpandVolume(
 	}
 
 	resize := resizeInput{
-		volumePath: volumePath,
-		fsType:     instance.Spec.MountInfo.FSType,
-		exec:       ns.mounter.Exec,
+		volumePath:   volumePath,
+		fsType:       instance.Spec.MountInfo.FSType,
+		iqn:          instance.Spec.ISCSISpec.Iqn,
+		targetPortal: instance.Spec.ISCSISpec.TargetIP,
+		exec:         ns.mounter.Exec,
 	}
 
 	list, err := ns.mounter.List()
