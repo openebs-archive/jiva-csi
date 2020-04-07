@@ -61,7 +61,38 @@ openebs-jiva-csi-node-56t5g     2/2     Running   0          6m13s
 
 ### Provision a Jiva volume
 
-1. Create a Storage Class to dynamically provision volumes
+1. Create Jiva volume policy to set various policies for creating
+   jiva volume. Though this is optional as there are already some
+   default values are set for some field like replicaSC, replicationFactor
+   etc with default value openebs-hostpath and 3 respectively.
+   A sample jiva volume policy CR looks like:
+   ``` 
+    apiVersion: openebs.io/v1alpha1
+    kind: JivaVolumePolicy
+    metadata:
+      name: example-jivavolumepolicy
+      namespace: openebs
+    spec:
+      replicaSC: openebs-hostpath
+      enableBufio: false
+      autoScaling: false
+      target:
+        # monitor: false
+        replicationFactor: 1
+        # auxResources:
+        # tolerations:
+        # resources:
+        # affinity:
+        # nodeSelector:
+        # priorityClassName:
+      # replica:
+        # tolerations:
+        # resources:
+        # affinity:
+        # nodeSelector:
+        # priorityClassName:
+    ```
+2. Create a Storage Class to dynamically provision volumes
    using jiva-csi driver. A sample storage class looks like:
    ```
    apiVersion: storage.k8s.io/v1
@@ -71,8 +102,7 @@ openebs-jiva-csi-node-56t5g     2/2     Running   0          6m13s
    provisioner: jiva.csi.openebs.io
    parameters:
      cas-type: "jiva"
-     replicaCount: "1"
-     replicaSC: "openebs-hostpath"
+     policy: "example-jivavolumepolicy"
    ```
 2. Create PVC by specifying the above Storage Class in the PVC spec
    ```
@@ -88,7 +118,7 @@ openebs-jiva-csi-node-56t5g     2/2     Running   0          6m13s
        requests:
          storage: 4Gi
    ```
-3. Deploy your application by specifying the PVC name
+4. Deploy your application by specifying the PVC name
    ```
    apiVersion: apps/v1
    kind: Deployment
