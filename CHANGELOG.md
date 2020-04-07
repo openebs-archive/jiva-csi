@@ -1,3 +1,10 @@
+1.9.0-RC1 / 2020-04-07
+========================
+
+
+  *  fix(node-driver): only rescan the volume to be resized ([#20](https://www.github.com/openebs/jiva-csi#20), [@utkarshmani1997](https://github.com/utkarshmani1997))
+
+
 1.7.0-RC1 / 2020-02-05
 ========================
 
