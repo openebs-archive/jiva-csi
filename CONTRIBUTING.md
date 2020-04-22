@@ -1,6 +1,6 @@
-# Contributing to OpenEBS Jiva
+# Contributing to OpenEBS jiva-csi
 
-OpenEBS uses the standard GitHub pull requests process to review and accept contributions.  There are several areas that could use your help. For starters, you could help in improving the sections in this document by either creating a new issue describing the improvement or submitting a pull request to this repository. The issues for the various OpenEBS components (including jiva components) are maintained in [openebs/openebs](https://github.com/openebs/openebs/issues) repository.
+OpenEBS uses the standard GitHub pull requests process to review and accept contributions.  There are several areas that could use your help. For starters, you could help in improving the sections in this document by either creating a new issue describing the improvement or submitting a pull request to this repository. The issues for the various OpenEBS components (including jiva-csi components) are maintained in [openebs/openebs](https://github.com/openebs/openebs/issues) repository.
 
 * If you are a first-time contributor, please see [Steps to Contribute](#steps-to-contribute).
 * If you have documentation improvement ideas, go ahead and create a pull request. See [Pull Request checklist](#pull-request-checklist).
@@ -59,25 +59,24 @@ This project is implemented using Go and uses the standard golang tools for deve
 
 ### Fork in the cloud
 
-1. Visit https://github.com/openebs/jiva.
+1. Visit https://github.com/openebs/jiva-csi.
 2. Click `Fork` button (top right) to establish a cloud-based fork.
 
 ### Clone fork to local host
 
-Place openebs/jiva' code on your `GOPATH` using the following cloning procedure.
+Place openebs/jiva-csi' code on your `GOPATH` using the following cloning procedure.
 Create your clone:
 
-```sh
-
+```
 mkdir -p $GOPATH/src/github.com/openebs
 cd $GOPATH/src/github.com/openebs
 
 # Note: Here $user is your GitHub profile name
-git clone https://github.com/$user/jiva.git
+git clone https://github.com/$user/jiva-csi.git
 
 # Configure remote upstream
-cd $GOPATH/src/github.com/openebs/jiva
-git remote add upstream https://github.com/openebs/jiva.git
+cd $GOPATH/src/github.com/openebs/jiva-csi
+git remote add upstream https://github.com/openebs/jiva-csi.git
 
 # Never push to upstream master
 git remote set-url --push upstream no_push
@@ -88,14 +87,7 @@ git remote -v
 
 ### Make your changes and build them
 
- ```sh
- cd $GOPATH/src/github.com/openebs/jiva
+ ```
+ cd $GOPATH/src/github.com/openebs/jiva-csi
  make build
  ```
-
-The build will:
--   Download *dapper* using curl.
--   Download *trash* using go get for dependency management.
--   Trigger a build using *dapper* - wrapper around docker.
-
-

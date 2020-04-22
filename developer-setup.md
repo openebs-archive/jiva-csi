@@ -4,32 +4,31 @@
 ## Prerequisites
 
 * You have Go 1.14 installed on your local host/development machine.
-* You have Docker installed on your local host/development machine. Docker is required for building jiva container images and to push them into a Kubernetes cluster for testing.
-* You have `kubectl` installed. For running integration tests, you will require an existing single node cluster with [openebs](https://blog.openebs.io/how-to-install-openebs-with-kubernetes-using-minikube-2ed488dff1c2) installed. Don't worry if you don't have access to the Kubernetes cluster, raising a PR with the jiva repository will run integration tests for your changes against a Minikube cluster.
+* You have Docker installed on your local host/development machine. Docker is required for building jiva-csi container images and to push them into a Kubernetes cluster for testing.
+* You have `kubectl` installed. For running integration tests, you will require an existing single node cluster with [openebs](https://blog.openebs.io/how-to-install-openebs-with-kubernetes-using-minikube-2ed488dff1c2) installed. Don't worry if you don't have access to the Kubernetes cluster, raising a PR with the jiva-csi repository will run integration tests for your changes against a Minikube cluster.
 
 ## Initial Setup
 
 ### Fork in the cloud
 
-1. Visit https://github.com/openebs/jiva
+1. Visit https://github.com/openebs/jiva-csi
 2. Click `Fork` button (top right) to establish a cloud-based fork.
 
 ### Clone fork to local host
 
-Place openebs/jiva's code on your `GOPATH` using the following cloning procedure.
+Place openebs/jiva-csi's code on your `GOPATH` using the following cloning procedure.
 Create your clone:
 
-```sh
-
+```
 mkdir -p $GOPATH/src/github.com/openebs
 cd $GOPATH/src/github.com/openebs
 
 # Note: Here user= your github profile name
-git clone https://github.com/$user/jiva.git
+git clone https://github.com/$user/jiva-csi.git
 
 # Configure remote upstream
-cd $GOPATH/src/github.com/openebs/jiva
-git remote add upstream https://github.com/openebs/jiva.git
+cd $GOPATH/src/github.com/openebs/jiva-csi
+git remote add upstream https://github.com/openebs/jiva-csi.git
 
 # Never push to upstream master
 git remote set-url --push upstream no_push
@@ -41,30 +40,25 @@ git remote -v
 
 ### Building and Testing your changes
 
-* To build the jiva binary
-```
-go build
-```
-
 * To build the docker image
 ```
 make build
 ```
 
 * Test your changes
-Integration tests are written in shell script and jiva controller and replicas are run as docker containers.
+Integration tests are written in shell script and jiva-csi controller and replicas are run as docker containers.
 To run the run the integration tests locally, run
 ```
-make _run_ci
+make test
 ```
 
 ## Git Development Workflow
 
 ### Always sync your local repository:
-Open a terminal on your local host. Change directory to the jiva fork root.
+Open a terminal on your local host. Change directory to the jiva-csi fork root.
 
 ```
-$ cd $GOPATH/src/github.com/openebs/jiva
+$ cd $GOPATH/src/github.com/openebs/jiva-csi
 ```
 
  Checkout the master branch.
@@ -76,20 +70,20 @@ $ cd $GOPATH/src/github.com/openebs/jiva
  ```
 
  Recall that origin/master is a branch on your remote GitHub repository.
- Make sure you have the upstream remote openebs/jiva by listing them.
+ Make sure you have the upstream remote openebs/jiva-csi by listing them.
 
  ```
  $ git remote -v
- origin	https://github.com/$user/jiva.git (fetch)
- origin	https://github.com/$user/jiva.git (push)
- upstream	https://github.com/openebs/jiva.git (fetch)
- upstream	https://github.com/openebs/jiva.git (no_push)
+ origin	https://github.com/$user/jiva-csi.git (fetch)
+ origin	https://github.com/$user/jiva-csi.git (push)
+ upstream	https://github.com/openebs/jiva-csi.git (fetch)
+ upstream	https://github.com/openebs/jiva-csi.git (no_push)
  ```
 
  If the upstream is missing, add it by using below command.
 
  ```
- $ git remote add upstream https://github.com/openebs/jiva.git
+ $ git remote add upstream https://github.com/openebs/jiva-csi.git
  ```
  Fetch all the changes from the upstream master branch.
 
@@ -100,7 +94,7 @@ $ cd $GOPATH/src/github.com/openebs/jiva
  remote: Total 141 (delta 52), reused 46 (delta 46), pack-reused 66
  Receiving objects: 100% (141/141), 112.43 KiB | 0 bytes/s, done.
  Resolving deltas: 100% (79/79), done.
- From github.com:openebs/jiva
+ From github.com:openebs/jiva-csi
    * branch            master     -> FETCH_HEAD
  ```
 
@@ -134,7 +128,7 @@ $ cd $GOPATH/src/github.com/openebs/jiva
  Compressing objects: 100% (38/38), done.
  Writing objects: 100% (69/69), 8.76 KiB | 0 bytes/s, done.
  Total 69 (delta 53), reused 47 (delta 31)
- To https://github.com/$user/jiva.git
+ To https://github.com/$user/jiva-csi.git
  8e107a9..5035fa1  master -> master
  ```
 
@@ -171,5 +165,5 @@ Before you raise the Pull Requests, ensure you have reviewed the checklist in th
 - Ensure that you have added the required unit tests for the bug fixes or new feature that you have introduced.
 - Ensure your commits history is clean with proper header and descriptions.
 
-Go to the [openebs/jiva github](https://github.com/openebs/jiva) and follow the Open Pull Request link to raise your PR from your development branch.
+Go to the [openebs/jiva-csi github](https://github.com/openebs/jiva-csi) and follow the Open Pull Request link to raise your PR from your development branch.
 

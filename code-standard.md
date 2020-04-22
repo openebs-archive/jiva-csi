@@ -14,13 +14,13 @@ If you set your `user.name` and `user.email` in git config, you can sign your co
 ## Verifying code style
 
 ```
-make lint
+make vet
 ```
 
 ## Adding a changelog
 If PR is about adding a new feature or bug fixes then Authors of the PR are expected to add a changelog file with their pull request. This changelog file should be a new file created under `changelogs/unreleased` folder. Name of this file must be in in `pr_number-username` format and contents of the file should be the one liner text which explain the feature or bug fix.
 
 ```sh
-jiva/changelogs/unreleased   <- folder
+jiva-csi/changelogs/unreleased   <- folder
     12-github_user_name      <- file
 ```
