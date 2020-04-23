@@ -16,6 +16,8 @@ about: Tell us about a problem you are experiencing
 
 * `kubectl logs <jiva-csi controller pod name> -n kube-system`
 * `kubectl logs <jiva-csi node pod name> -n kube-system`
+* `kubectl get jv <jiva volume cr name> -n openebs`
+* `kubectl get jvp <jiva volume policy name> -n openebs`
 
 **Anything else you would like to add:**
 [Miscellaneous information that will assist in solving the issue.]
