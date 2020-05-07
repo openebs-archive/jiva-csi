@@ -32,10 +32,10 @@
 
 # Output registry and image names for operator image
 # Set env to override this value
-ifeq (${REGISTRY}, )
-  REGISTRY:=openebs
+ifeq (${IMAGE_ORG}, )
+  IMAGE_ORG:=openebs
 endif
-export REGISTRY
+export IMAGE_ORG
 
 # Determine the arch/os
 ifeq (${XC_OS}, )
@@ -113,7 +113,7 @@ help:
 	@echo "Available commands:"
 	@echo "  build                           - build csi source code"
 	@echo "  image                           - build csi container image"
-	@echo "  push                            - push csi to dockerhub registry (${REGISTRY})"
+	@echo "  push                            - push csi to dockerhub registry (${IMAGE_ORG})"
 	@echo ""
 	@make print-variables --no-print-directory
 
@@ -126,7 +126,7 @@ print-variables:
 	@echo "  COMMIT:     ${COMMIT}"
 	@echo "Testing variables:"
 	@echo " Produced Image: ${PLUGIN_NAME}:${PLUGIN_TAG}"
-	@echo " REGISTRY: ${REGISTRY}"
+	@echo " IMAGE_ORG: ${IMAGE_ORG}"
 
 # Bootstrap the build by downloading additional tools
 bootstrap:
@@ -163,24 +163,24 @@ build: deps test
 	GOOS=linux go build -a -ldflags '$(LDFLAGS)' -o ./build/bin/$(PLUGIN_NAME) ./cmd/csi/main.go
 
 image: build
-	@echo "--> Build image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
-	docker build -f ./build/Dockerfile -t $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) $(DBUILD_ARGS) .
+	@echo "--> Build image $(IMAGE_ORG)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
+	docker build -f ./build/Dockerfile -t $(IMAGE_ORG)/$(PLUGIN_NAME):$(PLUGIN_TAG) $(DBUILD_ARGS) .
 
 push-image: image
-	@echo "--> Push image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
-	docker push $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG)
+	@echo "--> Push image $(IMAGE_ORG)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
+	docker push $(IMAGE_ORG)/$(PLUGIN_NAME):$(PLUGIN_TAG)
 
 push:
-	@echo "--> Push image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
-	@DIMAGE=$(REGISTRY)/$(PLUGIN_NAME) ./build/push
+	@echo "--> Push image $(IMAGE_ORG)/$(PLUGIN_NAME):$(PLUGIN_TAG) ..."
+	@DIMAGE=$(IMAGE_ORG)/$(PLUGIN_NAME) ./build/push
 
 tag:
-	@echo "--> Tag image $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) to $(REGISTRY)/$(PLUGIN_NAME):$(GIT_TAG) ..."
-	docker tag $(REGISTRY)/$(PLUGIN_NAME):$(PLUGIN_TAG) $(REGISTRY)/$(PLUGIN_NAME):$(GIT_TAG)
+	@echo "--> Tag image $(IMAGE_ORG)/$(PLUGIN_NAME):$(PLUGIN_TAG) to $(IMAGE_ORG)/$(PLUGIN_NAME):$(GIT_TAG) ..."
+	docker tag $(IMAGE_ORG)/$(PLUGIN_NAME):$(PLUGIN_TAG) $(IMAGE_ORG)/$(PLUGIN_NAME):$(GIT_TAG)
 
 push-tag: tag push
-	@echo "--> Push image $(REGISTRY)/$(PLUGIN_NAME):$(GIT_TAG) ..."
-	docker push $(REGISTRY)/$(PLUGIN_NAME):$(GIT_TAG)
+	@echo "--> Push image $(IMAGE_ORG)/$(PLUGIN_NAME):$(GIT_TAG) ..."
+	docker push $(IMAGE_ORG)/$(PLUGIN_NAME):$(GIT_TAG)
 
 clean:
 	rm -rf ./build/bin/
