@@ -95,6 +95,28 @@ func doesVolumeExist(volID string, cli *client.Client) (*jv.JivaVolume, error) {
 	return instance, nil
 }
 
+func isVolumeReady(volID string, cli *client.Client) (bool, error) {
+	instance, err := doesVolumeExist(volID, cli)
+	if err != nil {
+		return false, err
+	}
+
+	if instance.Status.Phase == jv.JivaVolumePhaseReady && instance.Status.Status == "RW" {
+		return true, nil
+	}
+	return false, nil
+}
+
+func isVolumeReachable(targetPortal string) bool {
+	// Create a connection to test if the iSCSI Portal is reachable,
+	if conn, err := net.Dial("tcp", targetPortal); err == nil {
+		conn.Close()
+		logrus.Debugf("Target: {%v} is reachable to create connections", targetPortal)
+		return true
+	}
+	return false
+}
+
 func waitForVolumeToBeReady(volID string, cli *client.Client) (*jv.JivaVolume, error) {
 	var retry int
 	var sleepInterval time.Duration = 0
@@ -261,14 +283,12 @@ func verifyMountOpts(opts []string, desiredOpt string) bool {
 
 func (n *NodeMounter) remount(vol jv.JivaVolume, stagingPathExists, targetPathExists bool) {
 	defer func() {
-		logrus.Infof("Remount: mount operation of volume: {%s} is finished", vol.Name)
 		request.TransitionVolListLock.Lock()
-		// Remove the volume from ReqMountList once the remount operation is
-		// complete
 		delete(request.TransitionVolList, vol.Name)
 		request.TransitionVolListLock.Unlock()
 	}()
 
+	logrus.Infof("Remount operation for volume: {%s} started", vol.Name)
 	if err := n.remountVolume(
 		stagingPathExists, targetPathExists,
 		&vol,
@@ -293,17 +313,13 @@ func (n *NodeMounter) remountVolume(
 	vol *jv.JivaVolume,
 ) (err error) {
 	options := []string{"rw"}
-	// Wait until it is possible to change the state of mountpoint or when
-	// login to volume is possible
-	_, err = waitForVolumeToBeReady(vol.Name, n.client)
-	if err != nil {
-		return
-	}
 
-	err = waitForVolumeToBeReachable(fmt.Sprintf("%v:%v", vol.Spec.ISCSISpec.TargetIP,
-		vol.Spec.ISCSISpec.TargetPort))
-	if err != nil {
-		return
+	if ready, err := isVolumeReady(vol.Name, n.client); err != nil || !ready {
+		return fmt.Errorf("Volume is not ready")
+	}
+	if reachable := isVolumeReachable(fmt.Sprintf("%v:%v", vol.Spec.ISCSISpec.TargetIP,
+		vol.Spec.ISCSISpec.TargetPort)); !reachable {
+		return fmt.Errorf("Volume is not reachable")
 	}
 
 	if stagingPathExists {
