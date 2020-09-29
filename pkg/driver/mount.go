@@ -30,7 +30,9 @@ import (
 	jv "github.com/openebs/jiva-operator/pkg/apis/openebs/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/kubernetes/pkg/util/mount"
+	utilexec "k8s.io/utils/exec"
+	"k8s.io/utils/mount"
+	utilpath "k8s.io/utils/path"
 )
 
 const (
@@ -51,7 +53,7 @@ type NodeMounter struct {
 func newNodeMounter() *NodeMounter {
 	nm := new(NodeMounter)
 	nm.Interface = mount.New("")
-	nm.Exec = mount.NewOsExec()
+	nm.Exec = utilexec.New()
 	return nm
 }
 
@@ -326,4 +328,8 @@ func (n *NodeMounter) remountVolume(
 	err = n.Mount(vol.Spec.MountInfo.StagingPath,
 		vol.Spec.MountInfo.TargetPath, "", options)
 	return
+}
+
+func (m *NodeMounter) ExistsPath(pathname string) (bool, error) {
+	return utilpath.Exists(utilpath.CheckFollowSymlink, pathname)
 }
