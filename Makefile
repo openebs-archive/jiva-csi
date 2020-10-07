@@ -75,6 +75,8 @@ EXTERNAL_TOOLS=\
 	golang.org/x/tools/cmd/cover \
 	github.com/axw/gocov/gocov \
 	github.com/ugorji/go/codec/codecgen \
+	github.com/onsi/ginkgo/ginkgo \
+	github.com/onsi/gomega/...
 
 # Lint our code. Reference: https://golang.org/cmd/vet/
 VETARGS?=-asmdecl -atomic -bool -buildtags -copylocks -methods \

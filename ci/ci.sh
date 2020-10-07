@@ -147,3 +147,4 @@ waitForAllComponentsToBeReady
 createJivaVolumePolicy
 initializeCSISanitySuite
 startTestSuite
+cd tests; make tests
