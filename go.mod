@@ -6,12 +6,15 @@ require (
 	github.com/container-storage-interface/spec v1.2.0
 	github.com/kubernetes-csi/csi-lib-iscsi v0.0.0-20191120152119-1430b53a1741
 	github.com/kubernetes-csi/csi-lib-utils v0.6.1
+	github.com/onsi/ginkgo v1.10.1
+	github.com/onsi/gomega v1.7.0
 	github.com/openebs/jiva-operator v1.12.2-0.20200929135617-d7f7f0d9e81d
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
 	golang.org/x/net v0.0.0-20191028085509-fe3aa8a45271
 	golang.org/x/sys v0.0.0-20191028164358-195ce5e7f934
 	google.golang.org/grpc v1.24.0
+	k8s.io/api v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/cloud-provider v0.17.3
