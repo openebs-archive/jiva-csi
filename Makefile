@@ -101,7 +101,7 @@ else
 	export GIT_TAG
 endif
 
-PACKAGES = $(shell go list ./... | grep -v 'vendor')
+PACKAGES = $(shell go list ./... | grep -v 'vendor\|tests')
 
 LDFLAGS ?= \
         -extldflags "-static" \
