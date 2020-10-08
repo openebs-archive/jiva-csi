@@ -27,19 +27,26 @@ import (
 )
 
 func createStorageClass() {
-	By("creating above storageclass")
 	stdout, stderr, err := KubectlWithInput([]byte(SCYAML), "apply", "-f", "-")
 	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
 }
 
 func deleteStorageClass() {
-	By("deleting storageclass")
 	stdout, stderr, err := KubectlWithInput([]byte(SCYAML), "delete", "-f", "-")
 	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
 }
 
+func createJivaVolumePolicy() {
+	stdout, stderr, err := KubectlWithInput([]byte(policyYAML), "apply", "-f", "-")
+	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
+}
+
+func deleteJivaVolumePolicy() {
+	stdout, stderr, err := KubectlWithInput([]byte(policyYAML), "delete", "-f", "-")
+	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
+}
+
 func deletePVC() {
-	By("Deleting pvc")
 	stdout, stderr, err := KubectlWithInput([]byte(PVCYAML), "delete", "-n", NSName, "-f", "-")
 	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
 
@@ -106,7 +113,6 @@ func createAndDeployAppPod() {
 }
 
 func deleteAppDeployment() {
-	By("deleting app deployment")
 	stdout, stderr, err := KubectlWithInput([]byte(DeployYAML), "delete", "-n", NSName, "-f", "-")
 	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
 	By("verifying deployment is deleted")
@@ -118,16 +124,16 @@ func deleteAppDeployment() {
 		}
 		break
 	}
-	Expect(err).NotTo(BeNil(), "not able to delete deployment")
+	Expect(err).To(BeNil(), "not able to delete deployment")
 }
 
 func verifyAppPodRunning() {
 	var (
 		state string
 	)
-	maxRetries := 10
+	maxRetries := 30
 	for i := 0; i < maxRetries; i++ {
-		stdout, stderr, err := Kubectl("get", "po", "ubuntu", "-n", NSName, "-o=template", "--template={{.status.phase}}")
+		stdout, stderr, err := Kubectl("get", "po", "--selector=name=ubuntu", "-n", NSName, "-o", "jsonpath={.items[*].status.phase}")
 		Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
 		state = strings.TrimSpace(string(stdout))
 		if state != "Running" {
@@ -143,7 +149,7 @@ func verifyAppPodRunning() {
 
 func restartAppPodAndVerifyRunningStatus() {
 	By("deleting app pod")
-	stdout, stderr, err := Kubectl("delete", "po", "ubuntu", "-n", NSName)
+	stdout, stderr, err := Kubectl("delete", "po", "--selector=name=ubuntu", "-n", NSName)
 	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
 	By("verifying app pod has restarted")
 	verifyAppPodRunning()

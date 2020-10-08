@@ -72,16 +72,17 @@ var _ = BeforeSuite(func() {
 
 	var err error
 
-	By("creating storage class", createStorageClass)
 	By("creating namespace")
 	stdout, stderr, err := Kubectl("create", "ns", NSName)
 	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
+	By("Creating JivaVolumePolicy", createJivaVolumePolicy)
+
 })
 
 var _ = AfterSuite(func() {
 
-	By("creating storage class", deleteStorageClass)
-	By("deleting namespace")
+	By("Deleting JivaVolumePolicy", deleteJivaVolumePolicy)
+	By("Deleting namespace")
 	stdout, stderr, err := Kubectl("delete", "ns", NSName)
 	Expect(err).ShouldNot(HaveOccurred(), "stdout=%s, stderr=%s", stdout, stderr)
 })

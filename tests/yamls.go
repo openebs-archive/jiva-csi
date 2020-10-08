@@ -23,30 +23,31 @@ kind: Deployment
 metadata:                                                                                                                                   
   name: ubuntu                                                                                                                              
   labels:                                                                                                                                   
-	app.kubernetes.io/name: ubuntu                                                                                                          
+    app.kubernetes.io/name: ubuntu
 spec:
   selector:
     matchLabels:
-	  name: ubuntu
+      name: ubuntu
   replicas: 1
   strategy:
     type: Recreate
     rollingUpdate: null
   template:
     metadata:
-	  labels:
-	    name: ubuntu
-	spec:
+      labels:
+        name: ubuntu
+    spec:
       containers:
-      - name: ubuntu                                                                                                                                image: ubuntu                                                                                              
-	    command: ["/usr/local/bin/pause"]                       
-	    volumeMounts: 
-	    - mountPath: /test1                                                                                                                 
-	      name: my-volume
+      - name: ubuntu
+        image: prateek14/ubuntu:18.04
+        command: ["/usr/local/bin/pause"]
+        volumeMounts:
+        - mountPath: /test1
+          name: my-volume
       volumes:
-	  - name: my-volume
-	    persistentVolumeClaim:
-	      claimName: jiva-pvc                                                                                                         
+      - name: my-volume
+        persistentVolumeClaim:
+          claimName: jiva-pvc
 `
 
 var PVCName = "jiva-pvc"
@@ -59,9 +60,9 @@ spec:
   accessModes:
   - ReadWriteOnce
   resources:
-	requests:
-	  storage: %s
-  storageClassName: jiva-sc
+    requests:
+      storage: 5G
+  storageClassName: jiva-csi-sc
 `
 
 var SCName = "jiva-sc"
@@ -69,7 +70,7 @@ var SCYAML = `
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: openebs-jiva-csi-sc
+  name: jiva-csi-sc
 provisioner: jiva.csi.openebs.io
 parameters:
   cas-type: "jiva"
@@ -82,4 +83,33 @@ kind: NameSpace
 apiVersion: v1
 metadata:
   name: jiva-ns
+`
+
+var policyYAML = `
+apiVersion: openebs.io/v1alpha1
+kind: JivaVolumePolicy
+metadata:
+  name: example-jivavolumepolicy
+  namespace: jiva-ns
+spec:
+  replicaSC: openebs-hostpath
+  enableBufio: false
+  autoScaling: false
+  target:
+    # monitor: false
+    replicationFactor: 1
+    # auxResources:
+    # tolerations:
+    # resources:
+    # affinity:
+    # nodeSelector:
+    # priorityClassName:
+  # replica:
+    # tolerations:
+    # resources:
+    # affinity:
+    # nodeSelector:
+    # priorityClassName:
+# status:
+  # phase:
 `
