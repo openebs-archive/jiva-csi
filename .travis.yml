@@ -53,6 +53,8 @@ script:
   - cd ${TRAVIS_BUILD_DIR}
   - kubectl apply -f deploy/jiva-csi.yaml
   - ./ci/ci.sh
+  - cd ./tests
+  - make tests
 
 after_success:
   - make push
