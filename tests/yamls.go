@@ -90,7 +90,7 @@ apiVersion: openebs.io/v1alpha1
 kind: JivaVolumePolicy
 metadata:
   name: example-jivavolumepolicy
-  namespace: jiva-ns
+  namespace: openebs
 spec:
   replicaSC: openebs-hostpath
   enableBufio: false
