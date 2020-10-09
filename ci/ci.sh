@@ -145,6 +145,5 @@ function createJivaVolumePolicy() {
 initializeTestEnv
 waitForAllComponentsToBeReady
 createJivaVolumePolicy
-cd tests; make tests
 initializeCSISanitySuite
 startTestSuite
