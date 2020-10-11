@@ -30,6 +30,14 @@ var _ = Describe("[csi] [jiva] TEST VOLUME RESIZE", func() {
 })
 
 func volumeResizeTest() {
+	currentK8sVersion := getCurrentK8sMinorVersion()
+	if currentK8sVersion < 16 {
+		fmt.Printf(
+			"resizing is not supported on Kubernetes version: 1.%d. Min supported version is 1.16\n",
+			currentK8sVersion,
+		))
+		return
+	}
 	By("creating and verifying PVC bound status", createAndVerifyPVC)
 	By("Creating and deploying app pod", createDeployVerifyApp)
 	By("Expanding PVC", expandPVC)

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"strconv"
+	"os"
 
 	"time"
 
@@ -275,4 +276,14 @@ func verifyCrashLoopBackOffStateOfAppPod(expState bool) {
 		time.Sleep(5 * time.Second)
 	}
 	Expect(state).To(Equal(expState), "while checking status of pod {%s}", "ubuntu")
+}
+
+func getCurrentK8sMinorVersion() int64 {
+        kubernetesVersionStr := os.Getenv("TEST_KUBERNETES_VERSION")
+        kubernetesVersion := strings.Split(kubernetesVersionStr, ".")
+        Expect(len(kubernetesVersion)).To(Equal(2))
+        kubernetesMinorVersion, err := strconv.ParseInt(kubernetesVersion[1], 10, 64)
+        Expect(err).ShouldNot(HaveOccurred())
+
+        return kubernetesMinorVersion
 }
