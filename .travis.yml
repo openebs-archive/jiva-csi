@@ -10,6 +10,7 @@ env:
   global:
     - GOARCH=$(go env GOARCH)
     - GOPATH=$(go env GOPATH)
+    - GOPROXY="https://gocenter.io,direct"
     - GO_FOR_RELEASE=1.13
     - CHANGE_MINIKUBE_NONE_USER=true
     - MINIKUBE_WANTUPDATENOTIFICATION=false
