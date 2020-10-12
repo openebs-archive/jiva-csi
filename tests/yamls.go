@@ -41,6 +41,13 @@ spec:
       - name: ubuntu
         image: prateek14/ubuntu:18.04
         command: ["/usr/local/bin/pause"]
+        livenessProbe:
+          exec:
+            command:
+            - touch
+            - /test1/file
+          initialDelaySeconds: 5
+          periodSeconds: 2
         volumeMounts:
         - mountPath: /test1
           name: my-volume
@@ -61,7 +68,21 @@ spec:
   - ReadWriteOnce
   resources:
     requests:
-      storage: 5G
+      storage: 5Gi
+  storageClassName: jiva-csi-sc
+`
+
+var ExpandedPVCYAML = `
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: jiva-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
   storageClassName: jiva-csi-sc
 `
 
@@ -72,6 +93,7 @@ apiVersion: storage.k8s.io/v1
 metadata:
   name: jiva-csi-sc
 provisioner: jiva.csi.openebs.io
+allowVolumeExpansion: true
 parameters:
   cas-type: "jiva"
   policy: "example-jivavolumepolicy"
