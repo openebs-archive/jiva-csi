@@ -15,7 +15,7 @@
 # limitations under the License.
 
 #set -ex
-test_repo="utkarshmani1997"
+test_repo="kubernetes-csi"
 
 function initializeTestEnv() {
 	echo "===================== Initialize test env ======================"
@@ -28,7 +28,7 @@ function initializeTestEnv() {
         "policy": "example-jivavolumepolicy"
 }
 EOT
-  sudo rm -rf /tmp/csi.sock
+    sudo rm -rf /tmp/csi.sock
 	sudo rm -rf /tmp/csi-mount
 	sudo rm -rf /tmp/csi-staging
 }
@@ -96,7 +96,7 @@ function initializeCSISanitySuite() {
 	CSI_TEST_REPO=https://github.com/$test_repo/csi-test.git
 	CSI_REPO_PATH="$GOPATH/src/github.com/$test_repo/csi-test"
 	if [ ! -d "$CSI_REPO_PATH" ] ; then
-		git clone -b add-volume-param $CSI_TEST_REPO $CSI_REPO_PATH
+		git clone -b "v4.0.1" $CSI_TEST_REPO $CSI_REPO_PATH
 	else
 		cd "$CSI_REPO_PATH"
 		git pull $CSI_REPO_PATH
