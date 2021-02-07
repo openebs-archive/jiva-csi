@@ -1,3 +1,5 @@
+## Note: The code from this repository has been migrated to [https://github.com/openebs/jiva-operator](https://github.com/openebs/jiva-operator/pull/28)
+
 # jiva-csi
 
 [![Releases](https://img.shields.io/github/release/openebs/openebs/all.svg?style=flat-square)](https://github.com/openebs/openebs/releases)
